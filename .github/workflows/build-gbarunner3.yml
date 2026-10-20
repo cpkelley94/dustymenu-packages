@@ -1,0 +1,78 @@
+name: Build GBARunner3 qualification bundle
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    outputs:
+      repository: ${{ steps.settings.outputs.repository }}
+      commit: ${{ steps.settings.outputs.commit }}
+      libtwl: ${{ steps.settings.outputs.libtwl }}
+      image: ${{ steps.settings.outputs.image }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - run: python3 -m unittest discover -s tests -v
+      - id: settings
+        run: python3 tools/packages.py settings --spec packages/gbarunner3.json >> "$GITHUB_OUTPUT"
+  build:
+    needs: prepare
+    runs-on: ubuntu-24.04
+    container:
+      image: ${{ needs.prepare.outputs.image }}
+    env:
+      EXPECTED_COMMIT: ${{ needs.prepare.outputs.commit }}
+      EXPECTED_LIBTWL: ${{ needs.prepare.outputs.libtwl }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: ${{ needs.prepare.outputs.repository }}
+          ref: ${{ needs.prepare.outputs.commit }}
+          path: upstream
+          submodules: recursive
+          persist-credentials: false
+      - name: Verify pins and compile using the upstream build recipe
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C upstream rev-parse HEAD)" = "$EXPECTED_COMMIT"
+          test "$(git -C upstream/code/libs/libtwl rev-parse HEAD)" = "$EXPECTED_LIBTWL"
+          make -C upstream/code
+          git -C upstream diff --exit-code -- configs
+          git -C upstream rev-parse HEAD > upstream/source-commit.txt
+          git -C upstream/code/libs/libtwl rev-parse HEAD > upstream/libtwl-commit.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: gbarunner3-raw
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            upstream/code/bootstrap/GBARunner3.nds
+            upstream/configs/
+            upstream/source-commit.txt
+            upstream/libtwl-commit.txt
+  package:
+    needs: [prepare, build]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: gbarunner3-raw
+          path: work/gbarunner3
+      - name: Package the complete upstream SD layout and inventory
+        run: python3 tools/packages.py bundle --spec packages/gbarunner3.json --input work/gbarunner3 --output dist/gbarunner3
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: gbarunner3-${{ needs.prepare.outputs.commit }}
+          path: dist/gbarunner3/
+          if-no-files-found: error
+          retention-days: 14

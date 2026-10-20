@@ -1,0 +1,11 @@
+{
+  "name": "dustymenu-packages",
+  "private": true,
+  "scripts": {
+    "test": "python3 -m unittest discover -s tests -v",
+    "check-site": "python3 tools/packages.py check-site --site public"
+  },
+  "devDependencies": {
+    "wrangler": "4.151.3"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "id": "gbarunner3",
+  "name": "GBARunner3",
+  "system": "gba",
+  "qualification": "pending",
+  "repository": "Gericom/GBARunner3",
+  "commit": "ecaa817815d9761745606592f04affe5ee9c3731",
+  "libtwlCommit": "e069645bed14a93e149e873e9273f04851e3a04e",
+  "toolchainImage": "devkitpro/devkitarm:20241104@sha256:847dcaaa096a8c0b5a24f23ab81dedd94d4ad07c714cc5b0f09fe78d2c42ceef",
+  "expectedConfigs": 301,
+  "extensions": ["gba", "agb"],
+  "notes": "Build/qualification artifact only. Preserve upstream GBARunner3.nds and _gba/configs layout. DS Lite/Pico launch, saves, redistribution terms, and on-device installation still require qualification."
+}

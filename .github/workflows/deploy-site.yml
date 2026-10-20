@@ -1,0 +1,44 @@
+name: Deploy static package site
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Deployment target
+        type: choice
+        options: [preview, production]
+        default: preview
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: pages-${{ inputs.target }}
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_PAGES_PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT }}
+      DEPLOY_BRANCH: ${{ inputs.target == 'production' && 'main' || 'testing' }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Check deployment configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo 'Missing CLOUDFLARE_API_TOKEN secret'; exit 1; }
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo 'Missing CLOUDFLARE_ACCOUNT_ID variable'; exit 1; }
+          test "$CLOUDFLARE_PAGES_PROJECT" = 'dustymenu-packages' || { echo 'Set CLOUDFLARE_PAGES_PROJECT to dustymenu-packages'; exit 1; }
+      - run: python3 -m unittest discover -s tests -v
+      - run: python3 tools/packages.py check-site --site public
+      - run: npm ci --ignore-scripts
+      - name: Upload the complete static snapshot
+        run: npx --no-install wrangler pages deploy public --project-name="$CLOUDFLARE_PAGES_PROJECT" --branch="$DEPLOY_BRANCH"

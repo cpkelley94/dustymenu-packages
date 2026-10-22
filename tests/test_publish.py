@@ -88,14 +88,18 @@ class PublishTests(unittest.TestCase):
     def test_snapshot_restore_preserves_current_static_site(self):
         archive=self.root / "snapshot.tar.gz"
         with tarfile.open(archive,"w:gz") as package:
-            for name,data in (("./index.html",b"old site"),("./v2/retained.pkg",b"payload")):
+            for name,data in (("./index.html",b"old site"),("./v2/retained.pkg",b"payload"),
+                              ("./v3/catalog.bin",b"signed catalog"),
+                              ("./v3/releases/gameyob/retained.pkg",b"v3 payload")):
                 item=tarfile.TarInfo(name);item.size=len(data);package.addfile(item,io.BytesIO(data))
         restore_snapshot.restore(archive,self.site)
         self.assertEqual((self.site / "index.html").read_text(),"Test site")
         self.assertEqual((self.site / "v2/retained.pkg").read_bytes(),b"payload")
+        self.assertEqual((self.site / "v3/catalog.bin").read_bytes(),b"signed catalog")
+        self.assertEqual((self.site / "v3/releases/gameyob/retained.pkg").read_bytes(),b"v3 payload")
 
     def test_snapshot_traversal_and_symlinks_rejected(self):
-        for name,link in (("../tools/publish.py",False),("./v2/link",True)):
+        for name,link in (("../tools/publish.py",False),("./v2/link",True),("./v3/link",True)):
             archive=self.root / "unsafe.tar.gz"
             with tarfile.open(archive,"w:gz") as package:
                 item=tarfile.TarInfo(name)

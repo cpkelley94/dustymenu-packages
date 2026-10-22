@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Restore only bounded regular v2 assets from a previous public release snapshot."""
+"""Restore bounded regular v2/v3 assets from a previous public release snapshot."""
 import argparse
 from pathlib import Path, PurePosixPath
 import tarfile
@@ -16,7 +16,7 @@ def restore(archive, site):
             if path.is_absolute() or ".." in path.parts or member.issym() or member.islnk() or not (member.isfile() or member.isdir()):
                 raise ValueError("Unsafe snapshot entry")
             # Root static files come from this checkout, never an older release.
-            if path.parts[0]!="v2": continue
+            if path.parts[0] not in ("v2", "v3"): continue
             if name in names or member.size>25*1024*1024: raise ValueError("Invalid snapshot asset")
             names.add(name);total+=member.size
             if len(names)>20000 or total>512*1024*1024: raise ValueError("Snapshot exceeds bounds")

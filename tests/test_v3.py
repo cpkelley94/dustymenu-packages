@@ -17,6 +17,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 import emulators
 import build_package
 import publish_v3
+import restore_snapshot
 
 
 def nds_bytes(size=520):
@@ -203,6 +204,20 @@ class V3Tests(unittest.TestCase):
             publish_v3.publish([self.spec], bundles, site, key, 1, public)
         with self.assertRaises(ValueError):
             publish_v3.publish([self.spec], bundles, site, key, 2, "00" * 32)
+        snapshot = self.root / "snapshot.tar.gz"
+        with tarfile.open(snapshot, "w:gz") as archive:
+            archive.add(site, arcname=".")
+        restored = self.root / "restored"
+        restored.mkdir()
+        (restored / "index.html").write_text("current site")
+        (restored / "health.json").write_bytes((site / "health.json").read_bytes())
+        restore_snapshot.restore(snapshot, restored)
+        self.assertEqual((restored / "v3/catalog.bin").read_bytes(), raw)
+        self.assertEqual((restored / "v3" / manifest["payload"]["source"]).read_bytes(), payload)
+        with self.assertRaises(ValueError):
+            publish_v3.publish([self.spec], bundles, restored, key, 1, public)
+        publish_v3.publish([self.spec], bundles, restored, key, 2, public)
+        self.assertEqual((restored / "index.html").read_text(), "current site")
         publish_v3.publish([self.spec], bundles, site, key, 2, public)
 
 

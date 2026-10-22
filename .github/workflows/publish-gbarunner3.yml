@@ -1,0 +1,95 @@
+name: Publish signed GBARunner3 package
+on:
+  workflow_dispatch:
+    inputs:
+      build_run:
+        description: Successful pinned GBARunner3 build run ID
+        required: true
+        default: '39473770245'
+      sequence:
+        description: Strictly increasing catalog sequence
+        required: true
+        default: '1'
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: pages-production-packages
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BUILD_RUN: ${{ inputs.build_run }}
+      SEQUENCE: ${{ inputs.sequence }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Validate inputs and retrieve the verified build
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$BUILD_RUN" =~ ^[0-9]+$ && "$SEQUENCE" =~ ^[0-9]+$ ]]
+          python3 -m unittest discover -s tests -v
+          gh run view "$BUILD_RUN" --json conclusion --jq '.conclusion' | grep -qx success
+          COMMIT=$(python3 -c 'import json; print(json.load(open("packages/gbarunner3.json"))["commit"])')
+          gh run download "$BUILD_RUN" --name "gbarunner3-$COMMIT" --dir work/bundle
+      - name: Retain the previous immutable release snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          PREVIOUS=$(gh release list --json tagName --limit 100 --jq '[.[].tagName | select(startswith("catalog-"))] | sort_by(ltrimstr("catalog-") | tonumber) | last // ""')
+          if test -n "$PREVIOUS"; then
+            gh release download "$PREVIOUS" --pattern pages-snapshot.tar.gz --dir work/previous
+            tar -xzf work/previous/pages-snapshot.tar.gz -C public --wildcards './v2/*'
+          else
+            mkdir -p work
+            CODE=$(curl -sS -o work/current-catalog -w '%{http_code}' https://dustymenu-packages.pages.dev/v2/catalog.bin)
+            if test "$CODE" != 404; then
+              test "$CODE" = 200
+              python3 -c 'from pathlib import Path; assert Path("work/current-catalog").read_bytes().lstrip().lower().startswith(b"<!doctype html>"), "Existing catalog has no retained snapshot; restore it before publishing"'
+            fi
+          fi
+      - name: Assemble the pinned corresponding source
+        shell: bash
+        run: |
+          set -euo pipefail
+          COMMIT=$(python3 -c 'import json; print(json.load(open("packages/gbarunner3.json"))["commit"])')
+          LIBTWL=$(python3 -c 'import json; print(json.load(open("packages/gbarunner3.json"))["libtwlCommit"])')
+          git clone --no-checkout https://github.com/Gericom/GBARunner3.git work/source
+          git -C work/source checkout "$COMMIT"
+          git -C work/source submodule update --init --recursive
+          test "$(git -C work/source/code/libs/libtwl rev-parse HEAD)" = "$LIBTWL"
+          tar --sort=name --mtime='2026-01-01' --owner=0 --group=0 --numeric-owner --exclude-vcs -czf work/source.tar.gz -C work/source .
+      - name: Sign the catalog and prepare the static installation assets
+        env:
+          SIGNING_KEY: ${{ secrets.CATALOG_SIGNING_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s\n' "$SIGNING_KEY" > work/publisher.pem
+          python3 tools/publish.py --spec packages/gbarunner3.json --bundle work/bundle --site public --key work/publisher.pem --source-archive work/source.tar.gz --sequence "$SEQUENCE"
+          rm work/publisher.pem
+          python3 tools/packages.py check-site --site public
+      - run: npm ci --ignore-scripts
+      - name: Deploy the complete signed snapshot
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          python3 tools/pages_release_mode.py
+          npx --no-install wrangler pages deploy public --project-name=dustymenu-packages --branch=main
+      - name: Retain public assets for the next publication
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -czf work/pages-snapshot.tar.gz -C public .
+          gh release create "catalog-$SEQUENCE" work/pages-snapshot.tar.gz --prerelease --title "GBARunner3 development catalog $SEQUENCE" --notes 'Signed on-device installation package. Physical GBARunner3 game/save qualification remains pending.'

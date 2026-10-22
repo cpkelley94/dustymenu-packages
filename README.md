@@ -88,24 +88,51 @@ The input must have `code/bootstrap/GBARunner3.nds`, `configs/`, and the matchin
 `source-commit.txt`/`libtwl-commit.txt` provenance files. The workflow produces this
 input directly from the pinned source checkout using upstream's `make -C code`.
 
+## Signed on-device publication
+
+The schema-2 client uses `https://dustymenu-packages.pages.dev/v2/catalog.bin`.
+This single envelope contains a 64-byte Ed25519 signature followed by the exact
+catalog JSON. `packages/publisher.json` pins the corresponding public key, also
+compiled into dustyMenu. Keep the private key backed up outside Git; the local
+copy is in the ignored `.private/catalog-signing.pem`, and publication uses the
+`CATALOG_SIGNING_KEY` Actions secret.
+
+Run **Publish signed GBARunner3 package** on `main`, selecting a successful pinned
+build run and a strictly increasing sequence (initially 1). This workflow:
+
+1. Checks the build inventory, every file hash, and the exact executable/config
+   paths. It fetches the matching source and libtwl submodule for distribution.
+2. Retains previous immutable assets from the last `catalog-<sequence>` GitHub
+   release snapshot.
+3. Packs the executable, 301 configs, and provenance notice into one uncompressed
+   streaming payload. The device needs two transfers after the catalog, rather
+   than 303 separate TLS handshakes or ZIP extraction.
+4. Authenticates the bounded file manifest through the signed catalog. The
+   manifest authenticates both the complete payload and each individual file.
+5. Deploys the complete static tree and keeps a public `pages-snapshot.tar.gz`
+   release asset for the next publication. Git-triggered Pages builds are disabled
+   so pushing source cannot replace the generated package snapshot.
+
+The deployed build is labeled development while hardware game/save qualification
+continues. No ROMs or proprietary BIOS are installed. On the device, open
+**Settings → Install Emulators**, then choose GBARunner3 install/update/repair.
+Existing compatibility configs are preserved; missing ones are installed.
+
+Do not run the bootstrap production deployment over a published package tree;
+its guard directs you to the signed publisher. Preview bootstrap deployments
+remain available.
+
 ## Next release milestones
 
 - Run the pinned compiler workflow, qualify its complete output on hardware, and
   resolve the precise launch/BIOS/save and redistribution requirements.
 - Add similarly pinned GameYob, SNEmulDS, and Genesis build/package recipes.
-- Implement the authenticated schema-2 catalog and package manifests together
-  with dustyMenu's multi-file installer. `manifest.json` here is a **build
-  inventory**, not a signed installer catalog. A real 302-file GBARunner3 inventory
-  exceeds the current 32 KiB catalog limit: keep the signed catalog compact and
-  authenticate a separate bounded per-package manifest by size/hash. The ZIP is
-  for manual testing; on-device ZIP extraction is not currently implemented.
-- Add trusted release signing and immutable published payloads, then enable the
-  stable channel after qualification. Keep the private signing key outside
-  `public/` and the repository. No signing secret is consumed by these workflows.
-- Complete DNS/verified HTTPS support in dustyNetwork before using the public
-  `pages.dev` host on-device. The currently released client is numeric-IPv4 HTTP
-  only.
+- Qualify game execution/save behavior and then promote a stable package channel.
+- The build ZIP remains a manual qualification artifact; signed manifests and
+  streaming payloads are generated separately by `tools/publish.py`.
+- dustyNetwork now supports DNS/HTTPS, and the user has confirmed Wi-Fi and package
+  host reachability on their DS Lite. Verify an actual on-device installation next.
 
-The app-side plan uses GBARunner3 by default and a scrollable Settings list with
-separate Wi-Fi and Install Emulators entries. Those on-device changes are separate
-from these server build/deployment workflows.
+The client uses GBARunner3 by default and a scrollable Settings list with separate
+Wi-Fi and Install Emulators entries. Its private signing key is never shipped to
+the device or public site.

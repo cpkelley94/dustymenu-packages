@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "id": "gameyob",
+  "name": "GameYob",
+  "system": "gb",
+  "qualification": "pending",
+  "repository": "DS-Homebrew/GameYob",
+  "commit": "c4d8672806b4a1cff8012fd40de4acf69b0094c2",
+  "toolchainImage": "skylyrac/blocksds:slim-v1.24.0@sha256:4220d25b110833d40f22596061b59718fe8044ce8a18e0531739e0624da019b8",
+  "provenance": "source",
+  "build": {
+    "commands": [
+      "make -C upstream"
+    ],
+    "outputs": [
+      {
+        "path": "upstream/gameyob.nds",
+        "destination": "/emulators/gameyob.nds",
+        "role": "executable"
+      }
+    ]
+  },
+  "extensions": ["gb", "gbc", "sgb"],
+  "manual": false,
+  "license": "MIT",
+  "notes": "Pinned GameYob build from the maintained DS-Homebrew tree. Verify argv autoload, SRAM, save states, and DS Lite behavior on hardware."
+}

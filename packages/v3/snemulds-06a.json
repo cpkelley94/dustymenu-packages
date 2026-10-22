@@ -1,0 +1,41 @@
+{
+  "schema": 1,
+  "id": "snemulds-06a",
+  "name": "SNEmulDS 0.6a",
+  "system": "snes",
+  "qualification": "pending",
+  "repository": "uckermann/SnemulDS",
+  "commit": "a92689abeb1ded315c7111557867bfbc3b418388",
+  "toolchainImage": "devkitpro/devkitarm:20180522@sha256:361612a751190f4eafebb9da80b1b371507e4c6bbc23addd17911eea90eb6ba9",
+  "provenance": "source",
+  "build": {
+    "commands": [
+      "mkdir -p upstream/.dusty-build && cp \"$DUSTY_PACKAGE_ROOT/packages/v3/compat/snemulds-06a/\"*.s \"$DUSTY_PACKAGE_ROOT/packages/v3/compat/snemulds-06a/README.md\" upstream/.dusty-build/",
+      "\"$DEVKITARM/bin/arm-none-eabi-gcc\" -c -march=armv5te -mthumb-interwork -o upstream/.dusty-build/ds_arm7_crt0.o upstream/.dusty-build/ds_arm7_crt0.s && \"$DEVKITARM/bin/arm-none-eabi-gcc\" -c -march=armv5te -mthumb-interwork -o upstream/.dusty-build/ds_arm9_crt0.o upstream/.dusty-build/ds_arm9_crt0.s && cp upstream/.dusty-build/*.o \"$DEVKITARM/arm-none-eabi/lib/\"",
+      "cp upstream/.dusty-build/linker-files/* \"$DEVKITARM/arm-none-eabi/lib/\"",
+      "ln -sfn disk/diskstr.h 'upstream/arm9/source/disk\\diskstr.h' && ln -sfn mpu/pu.h 'upstream/arm9/source/mpu\\pu.h' && ln -sfn pu.h 'upstream/arm9/source/mpu/mpu\\pu.h' && ln -sfn ../main.h 'upstream/arm9/source/mpu/..\\main.h' && ln -sfn ../opcodes.h 'upstream/arm9/source/mpu/..\\opcodes.h'",
+      "ln -sfn source/main.h upstream/arm9/main.h && ln -sfn source/opcodes.h upstream/arm9/opcodes.h && ln -sfn nds/memory.h \"$DEVKITPRO/libnds/include/nds\\memory.h\"",
+      "make -C upstream CC=\"arm-none-eabi-gcc -fgnu89-inline -Dstricmp=strcasecmp\"",
+      "rm -f 'upstream/arm9/source/disk\\diskstr.h' 'upstream/arm9/source/mpu\\pu.h' 'upstream/arm9/source/mpu/mpu\\pu.h' 'upstream/arm9/source/mpu/..\\main.h' 'upstream/arm9/source/mpu/..\\opcodes.h' upstream/arm9/main.h upstream/arm9/opcodes.h \"$DEVKITPRO/libnds/include/nds\\memory.h\""
+    ],
+    "outputs": [
+      {
+        "path": "upstream/snemuldsx.nds",
+        "destination": "/emulators/snemulds-06a.nds",
+        "role": "executable"
+      },
+      {
+        "path": "upstream/snemul.cfg",
+        "destination": "/snemul.cfg",
+        "role": "default-config"
+      }
+    ]
+  },
+  "extensions": [
+    "smc",
+    "sfc"
+  ],
+  "manual": false,
+  "license": "GPL-2.0",
+  "notes": "Pinned legacy SNEmulDS 0.6a source build using its historical devkitARM linker files and local MPL-2.0 crt0 compatibility sources. Verify argv launch, SNES saves, and DS Lite behavior on hardware."
+}

@@ -1,0 +1,38 @@
+{
+  "schema": 1,
+  "id": "gbarunner3",
+  "name": "GBARunner3",
+  "system": "gba",
+  "qualification": "pending",
+  "repository": "Gericom/GBARunner3",
+  "commit": "ecaa817815d9761745606592f04affe5ee9c3731",
+  "toolchainImage": "devkitpro/devkitarm:20241104@sha256:847dcaaa096a8c0b5a24f23ab81dedd94d4ad07c714cc5b0f09fe78d2c42ceef",
+  "provenance": "source",
+  "pinnedSubmodule": {
+    "path": "code/libs/libtwl",
+    "commit": "e069645bed14a93e149e873e9273f04851e3a04e"
+  },
+  "build": {
+    "commands": [
+      "make -C upstream/code"
+    ],
+    "outputs": [
+      {
+        "path": "upstream/code/bootstrap/GBARunner3.nds",
+        "destination": "/GBARunner3.nds",
+        "role": "executable"
+      },
+      {
+        "glob": "upstream/configs/*.json",
+        "namePattern": "^[A-Z0-9]{6}\\.json$",
+        "destination": "/_gba/configs/{name}",
+        "role": "default-config",
+        "expected": 301
+      }
+    ]
+  },
+  "extensions": ["gba", "agb"],
+  "manual": false,
+  "license": "GPL-2.0-or-later",
+  "notes": "Pinned qualification build. Preserve the complete upstream config inventory. Physical launch, saves, redistribution terms, and on-device installation remain under qualification."
+}

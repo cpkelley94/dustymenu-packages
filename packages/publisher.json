@@ -1,4 +1,5 @@
 {
   "publicKey": "7d930f78c4156c6ddb76b9f617db9aa11502796467a424369cb1a2b667f3be89",
-  "catalog": "https://dustymenu-packages.pages.dev/v2/catalog.bin"
+  "catalog": "https://dustymenu-packages.pages.dev/v2/catalog.bin",
+  "catalogV3": "https://dustymenu-packages.pages.dev/v3/catalog.bin"
 }

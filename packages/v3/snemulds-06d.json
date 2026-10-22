@@ -1,0 +1,40 @@
+{
+  "schema": 1,
+  "id": "snemulds-06d",
+  "name": "SNEmulDS 0.6d (manual)",
+  "system": "snes",
+  "qualification": "pending",
+  "repository": "cotodevel/SnemulDS",
+  "commit": "6559b3862fdf6eea6dab7ca908e0fdcbb3573030",
+  "toolchainImage": "devkitpro/devkitarm:20241104@sha256:847dcaaa096a8c0b5a24f23ab81dedd94d4ad07c714cc5b0f09fe78d2c42ceef",
+  "provenance": "upstream-release",
+  "build": {
+    "commands": [],
+    "outputs": [
+      {
+        "path": "upstream/release/arm7dldi-ntr/ToolchainGenericDS-multiboot.nds",
+        "destination": "/emulators/snemulds-06d/ToolchainGenericDS-multiboot.nds",
+        "role": "executable"
+      },
+      {
+        "path": "upstream/release/arm7dldi-ntr/SNEmulDS.nds",
+        "destination": "/emulators/snemulds-06d/SNEmulDS.nds",
+        "role": "support-data"
+      },
+      {
+        "path": "upstream/release/arm7dldi-ntr/tgds_multiboot_payload_ntr.binlzss",
+        "destination": "/emulators/snemulds-06d/tgds_multiboot_payload_ntr.binlzss",
+        "role": "support-data"
+      },
+      {
+        "path": "upstream/release/arm7dldi-ntr/toolchaingenericds-multiboot-config.txt",
+        "destination": "/emulators/snemulds-06d/toolchaingenericds-multiboot-config.txt",
+        "role": "support-data"
+      }
+    ]
+  },
+  "extensions": ["smc", "sfc"],
+  "manual": true,
+  "license": "GPL-2.0",
+  "notes": "Pinned upstream TGDS 1.65 NTR release files. TGDS requires a reproducible SDK/newlib rebuild that upstream does not provide as a pinned container; this package therefore uses the upstream release binaries rather than a CI source build. Manual launch only."
+}

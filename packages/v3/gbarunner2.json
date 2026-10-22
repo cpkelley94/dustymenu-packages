@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "id": "gbarunner2",
+  "name": "GBARunner2",
+  "system": "gba",
+  "qualification": "pending",
+  "repository": "Gericom/GBARunner2",
+  "commit": "6e4ce456597cabaaa45aac83bbd2f4c90580dca8",
+  "toolchainImage": "devkitpro/devkitarm:20200528@sha256:1acab59884288115af0e70782a9b69017a8cc6bad69542b24e8652233f215c56",
+  "provenance": "source",
+  "build": {
+    "commands": [
+      "ln -sf \"$DEVKITARM/bin/arm-none-eabi-objcopy\" \"$DEVKITARM/bin/arm-none-eabi-objcopy.exe\"",
+      "make -C upstream TARGET=gbarunner2"
+    ],
+    "outputs": [
+      {
+        "path": "upstream/gbarunner2.nds",
+        "destination": "/emulators/gbarunner2.nds",
+        "role": "executable"
+      }
+    ]
+  },
+  "extensions": ["gba", "agb"],
+  "manual": false,
+  "license": "GPL-3.0",
+  "notes": "Pinned GBARunner2 build. DS-mode argv launch and save behavior require hardware qualification before promotion."
+}

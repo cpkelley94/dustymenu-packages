@@ -42,8 +42,9 @@ jobs:
       - run: npm ci --ignore-scripts
       - name: Upload the complete static snapshot
         run: |
-          if test "$DEPLOY_BRANCH" = main && curl -fsS https://dustymenu-packages.pages.dev/v2/catalog.bin -o /dev/null; then
-            echo 'Use Publish signed GBARunner3 package to preserve the deployed package snapshot.'
+          if test "$DEPLOY_BRANCH" = main && { curl -fsS https://dustymenu-packages.pages.dev/v2/catalog.bin -o /dev/null || \
+             curl -fsS https://dustymenu-packages.pages.dev/v3/catalog.bin -o /dev/null; }; then
+            echo 'Use a signed publish workflow to preserve the deployed package snapshot.'
             exit 1
           fi
           npx --no-install wrangler pages deploy public --project-name="$CLOUDFLARE_PAGES_PROJECT" --branch="$DEPLOY_BRANCH"

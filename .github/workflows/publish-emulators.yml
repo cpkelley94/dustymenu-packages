@@ -1,0 +1,88 @@
+name: Publish signed emulator catalog
+on:
+  workflow_dispatch:
+    inputs:
+      build_run:
+        description: Successful Build pinned emulator packages run ID
+        required: true
+      sequence:
+        description: Strictly increasing schema-3 catalog sequence
+        required: true
+        default: '1'
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: pages-production-packages
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BUILD_RUN: ${{ inputs.build_run }}
+      SEQUENCE: ${{ inputs.sequence }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Validate inputs and retrieve every verified build
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$BUILD_RUN" =~ ^[0-9]+$ && "$SEQUENCE" =~ ^[0-9]+$ ]]
+          python3 -m unittest discover -s tests -v
+          gh run view "$BUILD_RUN" --json conclusion --jq '.conclusion' | grep -qx success
+          gh run download "$BUILD_RUN" --pattern 'emulator-*' --dir work/bundles
+      - name: Retain the previous immutable release snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          PREVIOUS=$(gh release list --limit 100 --json tagName,createdAt \
+            --jq '[.[] | select(.tagName | startswith("catalog-"))] | sort_by(.createdAt) | last | .tagName // ""')
+          if test -n "$PREVIOUS"; then
+            gh release download "$PREVIOUS" --pattern pages-snapshot.tar.gz --dir work/previous
+            python3 tools/restore_snapshot.py --archive work/previous/pages-snapshot.tar.gz --site public
+          else
+            mkdir -p work
+            for endpoint in v2 v3; do
+              CODE=$(curl -sS -o "work/current-$endpoint" -w '%{http_code}' \
+                "https://dustymenu-packages.pages.dev/$endpoint/catalog.bin")
+              if test "$CODE" != 404; then
+                test "$CODE" = 200
+                python3 -c "from pathlib import Path; p=Path('work/current-$endpoint').read_bytes(); assert p.lstrip().lower().startswith(b'<!doctype html>'), 'Existing $endpoint catalog has no retained snapshot; restore it before publishing'"
+              fi
+            done
+          fi
+      - name: Sign the schema-3 catalog and prepare all installation assets
+        env:
+          SIGNING_KEY: ${{ secrets.CATALOG_SIGNING_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s\n' "$SIGNING_KEY" > work/publisher.pem
+          python3 tools/publish_v3.py --bundles work/bundles --site public --key work/publisher.pem --sequence "$SEQUENCE"
+          rm work/publisher.pem
+          python3 tools/packages.py check-site --site public
+      - run: npm ci --ignore-scripts
+      - name: Deploy the complete signed snapshot
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          python3 tools/pages_release_mode.py
+          npx --no-install wrangler pages deploy public --project-name=dustymenu-packages --branch=main
+      - name: Retain public assets for the next publication
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -czf work/pages-snapshot.tar.gz -C public .
+          gh release create "catalog-v3-$SEQUENCE" work/pages-snapshot.tar.gz \
+            --prerelease --title "Emulator development catalog $SEQUENCE" \
+            --notes 'Signed schema-3 on-device emulator catalog. Hardware qualification remains pending.'

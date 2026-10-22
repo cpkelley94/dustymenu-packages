@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "id": "nesds",
+  "name": "nesDS",
+  "system": "nes",
+  "qualification": "pending",
+  "repository": "DS-Homebrew/NesDS",
+  "commit": "73b881baa7f92efef75c3bdfa8dbea1ce5ffcd9d",
+  "toolchainImage": "devkitpro/devkitarm:20241104@sha256:847dcaaa096a8c0b5a24f23ab81dedd94d4ad07c714cc5b0f09fe78d2c42ceef",
+  "provenance": "source",
+  "build": {
+    "commands": [
+      "make -C upstream"
+    ],
+    "outputs": [
+      {
+        "path": "upstream/nesDS.nds",
+        "destination": "/emulators/nesds.nds",
+        "role": "executable"
+      }
+    ]
+  },
+  "extensions": ["nes", "fds"],
+  "manual": false,
+  "license": "Public Domain",
+  "notes": "Pinned nesDS build. The separate FDS BIOS is not bundled; verify argv launch, saves, and DS Lite behavior on hardware."
+}

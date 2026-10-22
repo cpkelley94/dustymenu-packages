@@ -6,11 +6,14 @@ import sys
 import unittest
 import zipfile
 import warnings
+import io
+import tarfile
 
 import test_packages as fixtures
 ROOT, packages = fixtures.ROOT, fixtures.packages
 sys.path.insert(0, str(ROOT / "tools"))
 import publish
+import restore_snapshot
 
 
 class PublishTests(unittest.TestCase):
@@ -81,6 +84,24 @@ class PublishTests(unittest.TestCase):
             warnings.simplefilter("ignore", UserWarning)
             with zipfile.ZipFile(archive, "a") as zipped: zipped.writestr("GBARunner3.nds", b"bad")
         with self.assertRaises(ValueError): self.publish()
+
+    def test_snapshot_restore_preserves_current_static_site(self):
+        archive=self.root / "snapshot.tar.gz"
+        with tarfile.open(archive,"w:gz") as package:
+            for name,data in (("./index.html",b"old site"),("./v2/retained.pkg",b"payload")):
+                item=tarfile.TarInfo(name);item.size=len(data);package.addfile(item,io.BytesIO(data))
+        restore_snapshot.restore(archive,self.site)
+        self.assertEqual((self.site / "index.html").read_text(),"Test site")
+        self.assertEqual((self.site / "v2/retained.pkg").read_bytes(),b"payload")
+
+    def test_snapshot_traversal_and_symlinks_rejected(self):
+        for name,link in (("../tools/publish.py",False),("./v2/link",True)):
+            archive=self.root / "unsafe.tar.gz"
+            with tarfile.open(archive,"w:gz") as package:
+                item=tarfile.TarInfo(name)
+                if link: item.type=tarfile.SYMTYPE;item.linkname="../../.private"
+                package.addfile(item)
+            with self.assertRaises(ValueError): restore_snapshot.restore(archive,self.site)
 
 
 if __name__ == "__main__": unittest.main()

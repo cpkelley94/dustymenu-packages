@@ -95,6 +95,8 @@ def publish(spec, bundle, site, key, source_archive, sequence, expected_key):
     previous = site / "v2/catalog.bin"
     if previous.exists():
         old = previous.read_bytes()
+        if not 64 < len(old) <= 32832:
+            raise ValueError("Previous signed catalog exceeds bounds")
         # Existing snapshots are our own release artifacts; verify them before
         # trusting the sequence and publishing over an older deployment.
         with tempfile.TemporaryDirectory() as temporary:

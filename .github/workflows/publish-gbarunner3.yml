@@ -48,7 +48,7 @@ jobs:
           PREVIOUS=$(gh release list --json tagName --limit 100 --jq '[.[].tagName | select(startswith("catalog-"))] | sort_by(ltrimstr("catalog-") | tonumber) | last // ""')
           if test -n "$PREVIOUS"; then
             gh release download "$PREVIOUS" --pattern pages-snapshot.tar.gz --dir work/previous
-            tar -xzf work/previous/pages-snapshot.tar.gz -C public --wildcards './v2/*'
+            python3 tools/restore_snapshot.py --archive work/previous/pages-snapshot.tar.gz --site public
           else
             mkdir -p work
             CODE=$(curl -sS -o work/current-catalog -w '%{http_code}' https://dustymenu-packages.pages.dev/v2/catalog.bin)

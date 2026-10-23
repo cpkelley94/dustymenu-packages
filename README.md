@@ -4,9 +4,11 @@ Production host: https://dustymenu-packages.pages.dev/
 
 The legacy schema-2 GBARunner3 catalog remains at `/v2/catalog.bin`. The current
 client targets the signed schema-3 catalog at `/v3/catalog.bin`, which can carry
-all supported emulator packages in one bounded manifest. The expanded catalog
-has passed local publishing/install interoperability checks; CI reproduction
-and public deployment are pending.
+all supported emulator packages in one bounded manifest. All seven CI jobs passed
+in [build run 39825858870](https://github.com/cpkelley94/dustymenu-packages/actions/runs/39825858870).
+Catalog sequence 1 is live following
+[publication run 39829070824](https://github.com/cpkelley94/dustymenu-packages/actions/runs/39829070824)
+and is retained in release `catalog-v3-1`.
 
 | Package | System | Entry point | Launch |
 | --- | --- | --- | --- |
@@ -112,6 +114,12 @@ an isolated signed schema-3 catalog with a temporary test key, and installed all
 six through the shared client over localhost HTTP. All 16 installed file hashes,
 receipts, and one-touch defaults matched. This did not deploy public assets or
 qualify emulator execution/saves on hardware.
+
+The deployed catalog has also passed signature verification against the pinned
+publisher key and a complete host-client HTTPS installation of all seven CI
+packages. All 319 installed file hashes, receipts/statuses, and defaults matched;
+all five legacy v2 assets remained byte-identical on the live service. Physical
+DS Lite download/install and emulator launch/save qualification remain pending.
 
 ```sh
 python3 -m unittest discover -s tests -v

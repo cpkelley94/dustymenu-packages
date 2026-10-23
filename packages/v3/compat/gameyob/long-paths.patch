@@ -1,0 +1,169 @@
+diff --git a/arm9/include/inputhelper.h b/arm9/include/inputhelper.h
+--- a/arm9/include/inputhelper.h
++++ b/arm9/include/inputhelper.h
+@@ -19,6 +19,7 @@ enum {
+ };
+ 
+ #define CONFIG_FILENAME "/_nds/gameyobds.ini"
++#define GAMEYOB_PATH_BUFFER_SIZE 512
+ 
+ #define BUTTONA		0x1
+ #define BUTTONB		0x2
+diff --git a/arm9/source/filechooser.cpp b/arm9/source/filechooser.cpp
+--- a/arm9/source/filechooser.cpp
++++ b/arm9/source/filechooser.cpp
+@@ -364,6 +364,8 @@
+                 swiWaitForVBlank();
+                 readKeys();
+                 if (keyJustPressed(KEY_A)) {
++                    if (numFiles <= 0 || fileSelection < 0 || fileSelection >= numFiles)
++                        continue;
+                     if (flags[fileSelection] & FLAG_DIRECTORY) {
+                         if (strcmp(filenames[fileSelection], "..") == 0)
+                             goto lowerDirectory;
+diff --git a/arm9/source/gbprinter.cpp b/arm9/source/gbprinter.cpp
+--- a/arm9/source/gbprinter.cpp
++++ b/arm9/source/gbprinter.cpp
+@@ -253,9 +253,9 @@
+     }
+ 
+     // Find the first available "print number".
+-    char filename[300];
++    char filename[GAMEYOB_PATH_BUFFER_SIZE];
+     while (true) {
+-        sprintf(filename, "%s-%d.bmp", getRomBasename(), numPrinted);
++        snprintf(filename, sizeof(filename), "%s-%d.bmp", getRomBasename(), numPrinted);
+         if (appending ||                        // If appending, the last file written to is already selected.
+                 access(filename, R_OK) != 0) {  // Else, if the file doesn't exist, we're done searching.
+ 
+diff --git a/arm9/source/inputhelper.cpp b/arm9/source/inputhelper.cpp
+--- a/arm9/source/inputhelper.cpp
++++ b/arm9/source/inputhelper.cpp
+@@ -27,9 +27,9 @@
+ 
+ FILE* romFile=NULL;
+ FILE* saveFile=NULL;
+-char filename[100];
+-char savename[100];
+-char basename[100];
++char filename[GAMEYOB_PATH_BUFFER_SIZE];
++char savename[GAMEYOB_PATH_BUFFER_SIZE];
++char basename[GAMEYOB_PATH_BUFFER_SIZE];
+ char romTitle[20];
+ 
+ char* romPath = NULL;
+@@ -658,7 +658,7 @@
+     palettesPrintConfig(file);
+     fclose(file);
+ 
+-    char nameBuf[100];
++    char nameBuf[GAMEYOB_PATH_BUFFER_SIZE];
+     sprintf(nameBuf, "%s.cht", basename);
+     saveCheats(nameBuf);
+     return true;
+@@ -676,8 +676,15 @@
+ 
+ int loadRom(char* f)
+ {
+-    if (romFile != NULL)
++    // Leave room for cheat/save-state/printer suffixes on the derived basename.
++    if (f == NULL || strlen(f) >= sizeof(filename)-32 || strrchr(f, '.') == NULL) {
++        printLog("Invalid ROM path or path too long.\n");
++        return 1;
++    }
++    if (romFile != NULL) {
+         fclose(romFile);
++        romFile = NULL;
++    }
+     strcpy(filename, f);
+ 
+     // Check if this is a GBS file
+@@ -822,7 +829,7 @@
+         suspendStateExists = checkStateExists(-1);
+ 
+         // Load cheats
+-        char nameBuf[100];
++        char nameBuf[GAMEYOB_PATH_BUFFER_SIZE];
+         sprintf(nameBuf, "%s.cht", basename);
+         loadCheats(nameBuf);
+ 
+@@ -1155,7 +1162,7 @@
+ void saveState(int stateNum) {
+     FILE* outFile;
+     StateStruct state;
+-    char statename[100];
++    char statename[GAMEYOB_PATH_BUFFER_SIZE];
+ 
+     if (stateNum == -1)
+         sprintf(statename, "%s.yss", basename);
+@@ -1221,7 +1228,7 @@
+ int loadState(int stateNum) {
+     FILE *inFile;
+     StateStruct state;
+-    char statename[100];
++    char statename[GAMEYOB_PATH_BUFFER_SIZE];
+     int version;
+ 
+     memset(&state, 0, sizeof(StateStruct));
+@@ -1340,7 +1347,7 @@
+     if (!checkStateExists(stateNum))
+         return;
+ 
+-    char statename[100];
++    char statename[GAMEYOB_PATH_BUFFER_SIZE];
+ 
+     if (stateNum == -1)
+         sprintf(statename, "%s.yss", basename);
+@@ -1350,7 +1357,7 @@
+ }
+ 
+ bool checkStateExists(int stateNum) {
+-    char statename[256];
++    char statename[GAMEYOB_PATH_BUFFER_SIZE];
+ 
+     if (stateNum == -1)
+         sprintf(statename, "%s.yss", basename);
+diff --git a/arm9/source/main.cpp b/arm9/source/main.cpp
+--- a/arm9/source/main.cpp
++++ b/arm9/source/main.cpp
+@@ -59,18 +59,20 @@
+ void selectRom() {
+     unloadRom();
+ 
+-    loadFileChooserState(&romChooserState);
+-    const char* extraExtensions[] = {"gbs"};
+-    char* filename = startFileChooser(extraExtensions, true);
+-    saveFileChooserState(&romChooserState);
++    while (true) {
++        loadFileChooserState(&romChooserState);
++        const char* extraExtensions[] = {"gbs"};
++        char* filename = startFileChooser(extraExtensions, true);
++        saveFileChooserState(&romChooserState);
+ 
+-    if (!biosExists) {
+-        loadBios("gbc_bios.bin");
++        if (!biosExists) {
++            loadBios("gbc_bios.bin");
++        }
++        int result = filename != NULL ? loadRom(filename) : 1;
++        free(filename);
++        if (result == 0) break;
+     }
+ 
+-    loadRom(filename);
+-    free(filename);
+-
+     updateScreens();
+ 
+     initializeGameboyFirstTime();
+@@ -214,9 +216,7 @@
+ 
+     consoleInitialized = false;
+ 
+-    if (argc >= 2) {
+-        char* filename = argv[1];
+-        loadRom(filename);
++    if (argc >= 2 && loadRom(argv[1]) == 0) {
+         updateScreens();
+         initializeGameboyFirstTime();
+     }

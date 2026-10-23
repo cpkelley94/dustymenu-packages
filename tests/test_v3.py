@@ -111,7 +111,8 @@ class V3Tests(unittest.TestCase):
     def test_floating_pins_and_descriptor_drift_rejected(self):
         base = json.loads((ROOT / "packages/v3/gameyob.json").read_text())
         for key, value in (("commit", "main"), ("toolchainImage", "skylyrac/blocksds:latest"),
-                           ("extensions", ["gb"]), ("manual", True), ("qualification", "qualified")):
+                           ("extensions", ["gb"]), ("manual", True), ("qualification", "qualified"),
+                           ("revision", 0), ("revision", True), ("revision", 1.5), ("revision", 1000)):
             with self.subTest(key=key):
                 spec = copy.deepcopy(base)
                 spec[key] = value
@@ -135,6 +136,7 @@ class V3Tests(unittest.TestCase):
         first = archive.read_bytes()
         self.assertEqual(manifest["format"], "dustymenu-build-bundle-v2")
         self.assertEqual(manifest["provenance"], "source")
+        self.assertEqual(manifest["revision"], 2)
         with zipfile.ZipFile(archive) as package:
             self.assertEqual(package.namelist(), ["emulators/gameyob.nds"])
             self.assertEqual(package.read("emulators/gameyob.nds"), nds_bytes())
@@ -157,6 +159,23 @@ class V3Tests(unittest.TestCase):
         with self.assertRaises(ValueError):
             emulators.bundle(spec, self.workspace, self.output)
 
+    def test_package_revision_rejects_old_bundle_and_retains_legacy_compatibility(self):
+        manifest = emulators.bundle(self.spec, self.workspace, self.output)
+        for revision in (None, 1, True, "2"):
+            candidate = copy.deepcopy(manifest)
+            if revision is None:
+                candidate.pop("revision")
+            else:
+                candidate["revision"] = revision
+            with self.subTest(revision=revision), self.assertRaises(ValueError):
+                publish_v3.package_assets(self.spec, self.output, candidate, self.root / "site")
+        legacy = copy.deepcopy(self.spec)
+        legacy.pop("revision")
+        old_manifest = emulators.bundle(legacy, self.workspace, self.output)
+        old_manifest.pop("revision") # Bundles produced before revision support.
+        package = publish_v3.package_assets(legacy, self.output, old_manifest, self.root / "legacy-site")
+        self.assertEqual(package["version"], legacy["commit"][:12] + "-dev")
+
     def test_publish_schema3_catalog_payload_and_signature(self):
         emulators.bundle(self.spec, self.workspace, self.output)
         bundles = self.root / "bundles"
@@ -178,6 +197,7 @@ class V3Tests(unittest.TestCase):
         self.assertEqual(json.loads(raw[64:]), catalog)
         self.assertEqual(catalog["schema"], 3)
         package = catalog["packages"][0]
+        self.assertEqual(package["version"], self.spec["commit"][:12] + "-dev-r2")
         self.assertEqual(package["extensions"], ["gb", "gbc", "sgb"])
         self.assertFalse(package["manual"])
         manifest_bytes = (site / "v3" / package["source"]).read_bytes()

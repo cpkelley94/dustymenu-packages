@@ -8,8 +8,11 @@
   "commit": "c4d8672806b4a1cff8012fd40de4acf69b0094c2",
   "toolchainImage": "skylyrac/blocksds:slim-v1.24.0@sha256:4220d25b110833d40f22596061b59718fe8044ce8a18e0531739e0624da019b8",
   "provenance": "source",
+  "revision": 2,
   "build": {
     "commands": [
+      "mkdir -p upstream/.dusty-build && cp \"$DUSTY_PACKAGE_ROOT/packages/v3/compat/gameyob/long-paths.patch\" \"$DUSTY_PACKAGE_ROOT/packages/v3/compat/gameyob/README.md\" upstream/.dusty-build/",
+      "git apply --directory=upstream upstream/.dusty-build/long-paths.patch",
       "make -C upstream"
     ],
     "outputs": [
@@ -23,5 +26,5 @@
   "extensions": ["gb", "gbc", "sgb"],
   "manual": false,
   "license": "MIT",
-  "notes": "Pinned GameYob build from the maintained DS-Homebrew tree. Verify argv autoload, SRAM, save states, and DS Lite behavior on hardware."
+  "notes": "Pinned GameYob source with the included revision-2 long-ROM-path and empty-browser fixes. Verify GB/GBC argv autoload, SRAM, save states, and DS Lite behavior on hardware."
 }

@@ -136,6 +136,8 @@ def read_spec(path):
         raise ValueError("This tool only produces pending qualification artifacts")
     if spec.get("provenance") not in ("source", "upstream-release"):
         raise ValueError("Unknown build provenance")
+    if type(spec.get("revision", 1)) is not int or not 1 <= spec.get("revision", 1) <= 999:
+        raise ValueError("Package revision must be an integer from 1 to 999")
     if not isinstance(spec.get("license"), str) or not spec["license"].strip():
         raise ValueError("Missing license description")
     if not isinstance(spec.get("notes"), str) or len(spec["notes"]) > 1000:
@@ -333,6 +335,7 @@ def bundle(spec, workspace, output):
         "manual": spec["manual"],
         "qualification": "pending",
         "provenance": spec["provenance"],
+        "revision": spec.get("revision", 1),
         "license": spec["license"],
         "upstream": {
             "repository": spec["repository"],

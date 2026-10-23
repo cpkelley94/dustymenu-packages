@@ -34,6 +34,9 @@ incomplete glob inventories.
 
 - GBARunner3 also pins its `libtwl` submodule and all 301 compatibility configs.
 - GameYob and PicoDriveTWL build in a pinned BlocksDS image.
+- GameYob revision 2 applies the included long-ROM-path/empty-browser patch.
+  Package revisions add a `-rN` suffix to the installed version, so the device
+  can offer an update while the upstream source commit remains pinned.
 - GBARunner2, nesDS, and SNEmulDS 0.6a build in pinned devkitARM images.
 - Checkout, input preparation, and Python packaging run on the Ubuntu host;
   only shell compilation runs inside the pinned images. Historical Debian
@@ -107,6 +110,27 @@ refuses production deployment when either signed catalog is live, so it cannot
 replace published package assets. Use a publish workflow for production updates.
 
 ## Local checks
+
+### GameYob GBC black-screen correction
+
+The pinned GameYob source has 100-byte ROM, save-name, and basename buffers.
+Passing a full path longer than those buffers can corrupt emulator state. The
+same original GBC test ROM booted under a short name and black-screened with a
+117-byte full path. Revision 2 expands path and sidecar buffers, validates input
+length, handles failed ROM loads, and guards the empty file browser's A action.
+Both GBC header modes (`0x80` and `0xC0`) and a regular GB test ROM ran through
+dustyMenu/Pico with long filenames in the local runtime checks.
+
+Build and publish again to offer `c4d8672806b4-dev-r2` in Install Emulators. Old
+GameYob build artifacts are rejected for the revision-2 spec; use a new successful
+build run. After publication, refresh the on-device catalog and update GameYob.
+The corrected local bundle is generated under `dist/gameyob/`.
+
+The larger buffers address the reproduced overflow; this remains a qualification
+build. A separate 255-byte full-path stress case did not complete startup and
+requires further investigation. Physical DS Lite testing and the user's affected
+commercial titles remain unverified. GB/GBC remain one system because mode
+selection follows the cartridge header, independently of this path defect.
 
 A local cross-repository check bundled the real GBARunner2, GameYob, nesDS,
 SNEmulDS 0.6a, SNEmulDS 0.6d upstream release, and PicoDriveTWL binaries, published

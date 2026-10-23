@@ -78,6 +78,8 @@ def package_assets(spec, bundle_dir, manifest, site):
     if manifest.get("id") != spec["id"] or manifest.get("system") != spec["system"] \
             or manifest.get("manual") is not spec["manual"] \
             or manifest.get("provenance") != spec["provenance"] \
+            or type(manifest.get("revision", 1)) is not int \
+            or manifest.get("revision", 1) != spec.get("revision", 1) \
             or manifest.get("license") != spec["license"] \
             or manifest.get("upstream") != expected_upstream:
         raise ValueError(f"{spec['id']}: bundle provenance does not match the pinned spec")
@@ -89,6 +91,8 @@ def package_assets(spec, bundle_dir, manifest, site):
     if not archive.is_file():
         raise ValueError(f"{spec['id']}: missing build archive")
     version = spec["commit"][:12] + "-dev"
+    if spec.get("revision", 1) > 1:
+        version += "-r" + str(spec["revision"])
     release = f"releases/{spec['id']}/{spec['commit']}"
     files, payload = [], bytearray()
     with zipfile.ZipFile(archive) as zipped:

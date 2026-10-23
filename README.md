@@ -6,9 +6,10 @@ The legacy schema-2 GBARunner3 catalog remains at `/v2/catalog.bin`. The current
 client targets the signed schema-3 catalog at `/v3/catalog.bin`, which can carry
 all supported emulator packages in one bounded manifest. All seven CI jobs passed
 in [build run 39825858870](https://github.com/cpkelley94/dustymenu-packages/actions/runs/39825858870).
-Catalog sequence 1 is live following
-[publication run 39829070824](https://github.com/cpkelley94/dustymenu-packages/actions/runs/39829070824)
-and is retained in release `catalog-v3-1`.
+Catalog sequence 2 is live following
+[publication run 40015396016](https://github.com/cpkelley94/dustymenu-packages/actions/runs/40015396016)
+and is retained in release `catalog-v3-2`. The revision-3 GameYob correction below
+is prepared locally and has not yet been published.
 
 | Package | System | Entry point | Launch |
 | --- | --- | --- | --- |
@@ -34,7 +35,8 @@ incomplete glob inventories.
 
 - GBARunner3 also pins its `libtwl` submodule and all 301 compatibility configs.
 - GameYob and PicoDriveTWL build in a pinned BlocksDS image.
-- GameYob revision 2 applies the included long-ROM-path/empty-browser patch.
+- GameYob revision 3 includes checked battery-save initialization as well as
+  the earlier long-ROM-path/empty-browser patch.
   Package revisions add a `-rN` suffix to the installed version, so the device
   can offer an update while the upstream source commit remains pinned.
 - GBARunner2, nesDS, and SNEmulDS 0.6a build in pinned devkitARM images.
@@ -111,7 +113,30 @@ replace published package assets. Use a publish workflow for production updates.
 
 ## Local checks
 
-### GameYob GBC black-screen correction
+Host tests require Python, OpenSSL, and a C++17 compiler (`g++`).
+
+### GameYob battery-backed cartridge startup (revision 3)
+
+The user clarified that no-save Kirby's Dream Land boots, while save-backed GB
+and GBC titles fail. A short-named battery diagnostic reproduced an ARM9 data
+abort in `fclose(NULL)`: the old save initializer closed a failed `fopen` before
+creating a missing save. Revision 3 safely creates/loads saves, zero-extends
+short files while preserving existing bytes/RTC data, checks storage failures,
+and propagates initialization errors instead of running with invalid state.
+
+An original battery test now boots in GB and GBC modes, persists a SRAM marker,
+and reads it on a second boot through dustyMenu/Pico in melonDS. RTC and 4 MiB
+banked battery cases also start. The host regression test compiles the exact
+helper used by the package and covers new, short, full, oversized, and RTC saves,
+plus open/read/write/sync failure injection.
+
+Build and publish a fresh run to offer `c4d8672806b4-dev-r3` in Install Emulators.
+Old GameYob revision-1/2 artifacts are rejected for the revision-3 spec. After
+publication (next sequence 3), refresh the device catalog and update GameYob.
+The corrected local bundle is generated under `dist/gameyob/`. Existing saves
+should be retained for the update, not deleted as a troubleshooting step.
+
+### Earlier long-path correction (revision 2)
 
 The pinned GameYob source has 100-byte ROM, save-name, and basename buffers.
 Passing a full path longer than those buffers can corrupt emulator state. The
@@ -121,10 +146,8 @@ length, handles failed ROM loads, and guards the empty file browser's A action.
 Both GBC header modes (`0x80` and `0xC0`) and a regular GB test ROM ran through
 dustyMenu/Pico with long filenames in the local runtime checks.
 
-Build and publish again to offer `c4d8672806b4-dev-r2` in Install Emulators. Old
-GameYob build artifacts are rejected for the revision-2 spec; use a new successful
-build run. After publication, refresh the on-device catalog and update GameYob.
-The corrected local bundle is generated under `dist/gameyob/`.
+Revision 2 was published in catalog sequence 2. It fixes a separate real path
+overflow, but did not cover the battery-save startup failure described above.
 
 The larger buffers address the reproduced overflow; this remains a qualification
 build. A separate 255-byte full-path stress case did not complete startup and

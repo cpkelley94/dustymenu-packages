@@ -1,0 +1,107 @@
+diff --git a/arm9/source/inputhelper.cpp b/arm9/source/inputhelper.cpp
+--- a/arm9/source/inputhelper.cpp
++++ b/arm9/source/inputhelper.cpp
+@@ -9,6 +9,7 @@
+ #include <unistd.h>
+ 
+ #include "inputhelper.h"
++#include "batteryfile.h"
+ #include "mmu.h"
+ #include "gameboy.h"
+ #include "main.h"
+@@ -841,9 +842,7 @@
+         romFile = NULL;
+     }
+ 
+-    loadSave();
+-
+-    return 0;
++    return loadSave();
+ }
+ 
+ void loadRomBank() {
+@@ -897,8 +896,12 @@
+ int loadSave()
+ {
+     if (saveFile != NULL) {
+-        fclose(saveFile);
++        FILE* previous = saveFile;
+         saveFile = NULL;
++        if (fclose(previous) != 0) {
++            printLog("Could not close previous save.\n");
++            return 1;
++        }
+     }
+     if (externRam != NULL) {
+         free(externRam);
+@@ -924,6 +927,9 @@
+             case 4:
+                 numRamBanks = 16;
+                 break;
++            case 5:
++                numRamBanks = 8;
++                break;
+             default:
+                 printLog("Invalid RAM bank number: %x\nDefaulting to 4 banks\n", ramSize);
+                 numRamBanks = 4;
+@@ -937,49 +943,21 @@
+         return 0;
+ 
+     externRam = (u8*)malloc(numRamBanks*0x2000);
++    if (externRam == NULL) {
++        printLog("Not enough memory for cartridge save RAM.\n");
++        return 1;
++    }
+ 
+     if (gbsMode)
+         return 0; // GBS files don't get to save.
+ 
+-    // Now load the data.
+-    saveFile = fopen(savename, "r+b");
+-    int neededFileSize = numRamBanks*0x2000;
+-    if (MBC == MBC3 || MBC == HUC3)
+-        neededFileSize += sizeof(clockStruct);
+-
+-    int fileSize = 0;
+-    if (saveFile) {
+-        fseek(saveFile, 0, SEEK_END);
+-        fileSize = ftell(saveFile);
+-        fseek(saveFile, 0, SEEK_SET);
+-    }
+-
+-    if (!saveFile || fileSize < neededFileSize) {
+-        fclose(saveFile);
+-
+-        // Extend the size of the file, or create it
+-        if (!saveFile) {
+-            saveFile = fopen(savename, "wb");
+-            fseek(saveFile, neededFileSize-1, SEEK_SET);
+-            fputc(0, saveFile);
+-        }
+-        else {
+-            saveFile = fopen(savename, "ab");
+-            for (; fileSize<neededFileSize; fileSize++)
+-                fputc(0, saveFile);
+-        }
+-        fclose(saveFile);
+-
+-        saveFile = fopen(savename, "r+b");
+-    }
+-
+-    fread(externRam, 1, 0x2000*numRamBanks, saveFile);
+-
+-    switch (MBC) {
+-        case MBC3:
+-        case HUC3:
+-            fread(&gbClock, 1, sizeof(gbClock), saveFile);
+-            break;
++    const size_t rtcBytes = MBC == MBC3 || MBC == HUC3 ? sizeof(gbClock) : 0;
++    if (!gameyobOpenBatterySave(savename, externRam, size_t(numRamBanks)*0x2000,
++                               &gbClock, rtcBytes, saveFile)) {
++        printLog("Could not open, initialize, or read cartridge save.\n");
++        free(externRam);
++        externRam = NULL;
++        return 1;
+     }
+ 
+     return 0;

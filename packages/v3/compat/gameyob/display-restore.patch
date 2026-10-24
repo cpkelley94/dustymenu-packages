@@ -1,0 +1,388 @@
+diff --git a/arm9/include/console.h b/arm9/include/console.h
+--- a/arm9/include/console.h
++++ b/arm9/include/console.h
+@@ -23,6 +23,7 @@
+ 
+ 
+ void setMenuDefaults();
++void applyMenuSettings();
+ 
+ void displayMenu();
+ void closeMenu(); // updateScreens may need to be called after this
+diff --git a/arm9/include/gbgfx.h b/arm9/include/gbgfx.h
+--- a/arm9/include/gbgfx.h
++++ b/arm9/include/gbgfx.h
+@@ -23,6 +23,7 @@
+ extern u8 sprPaletteData[0x40];
+ 
+ void doAtVBlank(void (*func)(void));
++void waitForDSVBlank();
+ 
+ void drawScanline(int scanline);
+ void drawScanline_P2(int scanline);
+diff --git a/arm9/source/console.cpp b/arm9/source/console.cpp
+--- a/arm9/source/console.cpp
++++ b/arm9/source/console.cpp
+@@ -1,6 +1,7 @@
+ #include <nds.h>
+ #include "gbprinter.h"
+ #include "console.h"
++#include "consolelayout.h"
+ #include "inputhelper.h"
+ #include "filechooser.h"
+ #include "gbsnd.h"
+@@ -256,7 +257,6 @@
+         updateScreens();
+     }
+     if (value == 0) {
+-        doAtVBlank(checkBorder);
+         enableMenuOption("Console Output");
+     }
+     else {
+@@ -470,20 +471,28 @@
+ const int numMenus = sizeof(menuList)/sizeof(ConsoleSubMenu);
+ 
+ void setMenuDefaults() {
++    menuConsole = (PrintConsole*)malloc(sizeof(PrintConsole));
++    memcpy(menuConsole, consoleGetDefault(), sizeof(PrintConsole));
+     for (int i=0; i<numMenus; i++) {
+         for (int j=0; j<menuList[i].numOptions; j++) {
+             menuList[i].options[j].selection = menuList[i].options[j].defaultSelection;
+             menuList[i].options[j].enabled = true;
+-            if (menuList[i].options[j].numValues != 0) {
+-                menuList[i].options[j].function(menuList[i].options[j].defaultSelection);
+-            }
+         }
+     }
+ 
+     customPalette = 0;
+ 
+-    menuConsole = (PrintConsole*)malloc(sizeof(PrintConsole));
+-    memcpy(menuConsole, consoleGetDefault(), sizeof(PrintConsole));
++}
++
++void applyMenuSettings() {
++    // Configuration parsing populates palettes/controls before callbacks use
++    // them. Apply the resulting selections once, rather than resetting them.
++    for (int i=0; i<numMenus; i++) {
++        for (int j=0; j<menuList[i].numOptions; j++) {
++            if (menuList[i].options[j].numValues != 0)
++                menuList[i].options[j].function(menuList[i].options[j].selection);
++        }
++    }
+ }
+ 
+ void displayMenu() {
+@@ -507,7 +515,6 @@
+     }
+ 
+     updateScreens();
+-    doAtVBlank(redrawMenu);
+ }
+ void closeMenu() {
+     menuOn = false;
+@@ -743,6 +752,8 @@
+     for (int i=0; i<numMenus; i++) {
+         for (int j=0; j<menuList[i].numOptions; j++) {
+             if (strcasecmp(optionName, menuList[i].options[j].name) == 0) {
++                int count = menuList[i].options[j].numValues;
++                if (count > 0 && (value < 0 || value >= count)) return;
+                 menuList[i].options[j].selection = value;
+                 menuList[i].options[j].function(value);
+                 return;
+@@ -788,8 +799,8 @@
+     for (int i=0; i<numMenus; i++) {
+         for (int j=0; j<menuList[i].numOptions; j++) {
+             if (strcasecmp(menuList[i].options[j].name, option) == 0 && menuList[i].options[j].numValues != 0) {
++                if (val < 0 || val >= menuList[i].options[j].numValues) return;
+                 menuList[i].options[j].selection = val;
+-                menuList[i].options[j].function(val);
+                 return;
+             } else if (strcasecmp("Current Palette", option) == 0) {
+                 customPalette = val;
+@@ -831,6 +841,7 @@
+ 
+ // 2 frames delay
+ void setupScaledScreens2() {
++    if (!sharedData->scalingOn) return;
+     REG_DISPCNT &= ~(3<<16); // Disable main display
+     REG_DISPCNT_SUB |= 1<<16; // Enable sub display
+     if (gameScreen == 0)
+@@ -844,6 +855,7 @@
+ 
+ // 1 frame delay
+ void setupScaledScreens1() {
++    if (!sharedData->scalingOn) return;
+     powerOff(backlights[!gameScreen]);
+ 
+     if (!singleScreenMode) {
+@@ -856,9 +867,17 @@
+ }
+ 
+ void setupUnscaledScreens() {
++    if (sharedData->scalingOn) return;
++    // Scaling uses VRAM C as a bitmap and leaves bitmap/blending registers set.
++    // Restore the text engine before reloading the console's glyphs and map.
++    vramSetBankC(VRAM_C_SUB_BG);
++    videoSetModeSub(MODE_0_2D);
++    REG_BLDCNT_SUB = 0;
++    REG_BLDALPHA_SUB = 0;
+     if (!consoleInitialized) {
+         //consoleDemoInit(); // Or, consoleInit(menuConsole, ...)
+-        consoleInit(menuConsole, 0, BgType_Text4bpp, BgSize_T_256x256, 2, 0, false, true);
++        consoleInit(menuConsole, 0, BgType_Text4bpp, BgSize_T_256x256,
++                    GAMEYOB_CONSOLE_MAP_BASE, GAMEYOB_CONSOLE_TILE_BASE, false, true);
+         videoBgDisableSub(2);
+         videoBgDisableSub(3);
+         setPrintConsole(menuConsole);
+@@ -870,6 +888,7 @@
+ 		}
+         consoleInitialized = true;
+     }
++    videoBgEnableSub(0);
+ 
+     if (gameScreen == 0) {
+         if (singleScreenMode && (isMenuOn() || isFileChooserOn()))
+@@ -925,6 +947,12 @@
+                 powerOff(backlights[i]);
+         }
+     }
++    checkBorder();
++    if (isMenuOn() && !isFileChooserOn()) redrawMenu();
+ }
+ 
++void drainScaledFrame() {
++    if (!sharedData->scalingOn) doAtVBlank(setupUnscaledScreens);
++}
++
+ void updateScreens(bool waitToFinish) {
+@@ -939,16 +958,21 @@
+         doAtVBlank(setupScaledScreens1);
+ 
+         if (waitToFinish) {
+-            swiWaitForVBlank();
+-            swiWaitForVBlank();
++            waitForDSVBlank();
++            waitForDSVBlank();
+         }
+     }
+     else {
+         // Manage screens normally
++        const bool wasScaling = sharedData->scalingOn;
+         sharedData->scalingOn = 0;
+ 
+-        doAtVBlank(setupUnscaledScreens);
+-        if (waitToFinish)
+-            swiWaitForVBlank();
++        // Give an in-flight ARM7 capture/DMA a full frame to finish before
++        // reassigning VRAM C and replacing its bitmap with console graphics.
++        doAtVBlank(wasScaling ? drainScaledFrame : setupUnscaledScreens);
++        if (waitToFinish) {
++            waitForDSVBlank();
++            if (wasScaling) waitForDSVBlank();
++        }
+     }
+ }
+@@ -968,13 +987,13 @@
+ }
+ 
+ void consoleSetPosColor(int x, int y, int color) {
+-    u16* map = BG_MAP_RAM_SUB(22);
++    u16* map = menuConsole->fontBgMap;
+     map[y*32+x] &= ~TILE_PALETTE(15);
+     map[y*32+x] |= TILE_PALETTE(color);
+ }
+ 
+ void consoleSetLineColor(int line, int color) {
+-    u16* map = BG_MAP_RAM_SUB(22);
++    u16* map = menuConsole->fontBgMap;
+     for (int i=0; i<32; i++) {
+         map[line*32+i] &= ~TILE_PALETTE(15);
+         map[line*32+i] |= TILE_PALETTE(color);
+diff --git a/arm9/source/filechooser.cpp b/arm9/source/filechooser.cpp
+--- a/arm9/source/filechooser.cpp
++++ b/arm9/source/filechooser.cpp
+@@ -8,6 +8,7 @@
+ #include "filechooser.h"
+ #include "inputhelper.h"
+ #include "console.h"
++#include "gbgfx.h"
+ 
+ #define FLAG_DIRECTORY  1
+ #define FLAG_SUSPENDED  2
+@@ -361,7 +362,7 @@
+ 
+             // Wait for input
+             while (true) {
+-                swiWaitForVBlank();
++                waitForDSVBlank();
+                 readKeys();
+                 if (keyJustPressed(KEY_A)) {
+                     if (numFiles <= 0 || fileSelection < 0 || fileSelection >= numFiles)
+diff --git a/arm9/source/gameboy.cpp b/arm9/source/gameboy.cpp
+--- a/arm9/source/gameboy.cpp
++++ b/arm9/source/gameboy.cpp
+@@ -193,7 +193,7 @@
+     if (gameboyPaused) {
+         muteSND();
+         while (gameboyPaused) {
+-            swiWaitForVBlank();
++            waitForDSVBlank();
+             readKeys();
+             updateMenu();
+         }
+diff --git a/arm9/source/gbgfx.cpp b/arm9/source/gbgfx.cpp
+--- a/arm9/source/gbgfx.cpp
++++ b/arm9/source/gbgfx.cpp
+@@ -15,6 +15,7 @@
+ #include "gameboy.h"
+ #include "sgb.h"
+ #include "console.h"
++#include "framequeue.h"
+ #include "filechooser.h"
+ #include "inputhelper.h"
+ #include "common.h"
+@@ -446,10 +447,19 @@
+ }
+ 
+ 
+-std::vector<void (*)()> vblankTasks;
++static GameYobFrameQueue vblankTasks;
+ 
+ void doAtVBlank(void (*func)(void)) {
+-    vblankTasks.push_back(func);
++    vblankTasks.enqueue(func,dsFrameCounter);
++}
++
++static void serviceVBlankTasks() {
++    vblankTasks.service(dsFrameCounter);
++}
++
++void waitForDSVBlank() {
++    swiWaitForVBlank();
++    serviceVBlankTasks();
+ }
+ 
+ bool filterFlip=false;
+@@ -485,12 +495,8 @@
+         filterFlip = !filterFlip;
+     }
+ 
+-    // Copy the list so that functions which access vblankTasks work.
+-    std::vector<void (*)()> tasks = vblankTasks;
+-    vblankTasks.clear();
+-    for (uint i=0; i<tasks.size(); i++) {
+-        tasks[i]();
+-    }
++    // Console/font work, border I/O and queue allocations run in foreground
++    // after this IRQ, via waitForDSVBlank()/drawScreen().
+ }
+ 
+ // This just sets up the background
+@@ -548,7 +554,7 @@
+     initGFXPalette(true);
+ 
+     gbGraphicsDisabled = true;
+-    swiWaitForVBlank();
++    waitForDSVBlank();
+ 
+     WIN_IN = (1<<4) | (1<<12) | 1;
+     WIN_OUT = 1<<3;
+@@ -934,7 +940,7 @@
+ 
+ 
+ int loadBorder(const char* filename) {
+-    FILE* file = fopen(filename, "rb");
++    FILE* file = fopen(filename && *filename ? filename : "/border.bmp", "rb");
+     if (file == NULL) {
+         customBorderExists = false;
+         disableMenuOption("Custom Border");
+@@ -1327,12 +1333,13 @@
+ 
+     if (!(fastForwardMode || fastForwardKey)) {
+         if (interruptWaitMode == 1) // Always wait for Vblank.
+-            swiWaitForVBlank();
++            waitForDSVBlank();
+         else { // Continue if we've passed vblank.
+             if (!didVblank)
+-                swiWaitForVBlank();
++                waitForDSVBlank();
+         }
+     }
++    serviceVBlankTasks();
+     didVblank = false;
+ 
+     for (int p = 0; p < 8; p++) {
+diff --git a/arm9/source/inputhelper.cpp b/arm9/source/inputhelper.cpp
+--- a/arm9/source/inputhelper.cpp
++++ b/arm9/source/inputhelper.cpp
+@@ -7,6 +7,8 @@
+ #include <string.h>
+ #include <dirent.h>
+ #include <unistd.h>
++#include <sys/stat.h>
++#include <errno.h>
+ 
+ #include "inputhelper.h"
+ #include "batteryfile.h"
+@@ -600,8 +600,7 @@
+     if (file == NULL)
+         goto end;
+ 
+-    while (!feof(file)) {
+-        fgets(line, 100, file);
++    while (fgets(line, sizeof(line), file) != NULL) {
+         char c=0;
+         while (*line != '\0' && ((c = line[strlen(line)-1]) == ' ' || c == '\n' || c == '\r'))
+             line[strlen(line)-1] = '\0';
+@@ -644,6 +645,8 @@
+     return file != NULL;
+ }
+ 
+ bool writeConfigFile() {
++    if (mkdir("/_nds", 0777) != 0 && errno != EEXIST)
++        return false;
+     FILE* file = fopen(CONFIG_FILENAME, "w");
+     if (!file)
+@@ -657,7 +660,10 @@
+     controlsPrintConfig(file);
+     fprintf(file, "[palettes]\n");
+     palettesPrintConfig(file);
+-    fclose(file);
++    bool written = !ferror(file) && fflush(file) == 0;
++    if (written && fsync(fileno(file)) != 0) written = false;
++    if (fclose(file) != 0) written = false;
++    if (!written) return false;
+ 
+     char nameBuf[GAMEYOB_PATH_BUFFER_SIZE];
+     sprintf(nameBuf, "%s.cht", basename);
+diff --git a/arm9/source/main.cpp b/arm9/source/main.cpp
+--- a/arm9/source/main.cpp
++++ b/arm9/source/main.cpp
+@@ -206,10 +206,11 @@
+     fifoSendValue32(FIFO_USER_03, ((u32)sharedData)&0x00ffffff);
+ 
+     initInput();
+-    readConfigFile();
+     setMenuDefaults();
+-    swiWaitForVBlank();
+-    swiWaitForVBlank();
++    readConfigFile();
++    applyMenuSettings();
++    waitForDSVBlank();
++    waitForDSVBlank();
+     // initGFX is called in initializeGameboy, but I also call it from here to
+     // set up the vblank handler asap.
+     initGFX();
+diff --git a/arm9/source/mmu.cpp b/arm9/source/mmu.cpp
+--- a/arm9/source/mmu.cpp
++++ b/arm9/source/mmu.cpp
+@@ -1211,7 +1211,7 @@
+         cameraStartTransfer(camDataYUV, MCUREG_APT_SEQ_CMD_PREVIEW, CAMERA_NDMA_CHANNEL);
+ 
+         while(ndmaBusy(CAMERA_NDMA_CHANNEL))
+-            swiWaitForVBlank();
++            waitForDSVBlank();
+ 
+         cameraStopTransfer();
+     }

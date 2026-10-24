@@ -136,7 +136,7 @@ class V3Tests(unittest.TestCase):
         first = archive.read_bytes()
         self.assertEqual(manifest["format"], "dustymenu-build-bundle-v2")
         self.assertEqual(manifest["provenance"], "source")
-        self.assertEqual(manifest["revision"], 3)
+        self.assertEqual(manifest["revision"], self.spec["revision"])
         with zipfile.ZipFile(archive) as package:
             self.assertEqual(package.namelist(), ["emulators/gameyob.nds"])
             self.assertEqual(package.read("emulators/gameyob.nds"), nds_bytes())
@@ -161,7 +161,7 @@ class V3Tests(unittest.TestCase):
 
     def test_package_revision_rejects_old_bundle_and_retains_legacy_compatibility(self):
         manifest = emulators.bundle(self.spec, self.workspace, self.output)
-        for revision in (None, 1, 2, True, "3"):
+        for revision in (None, 1, 2, 3, True, "4"):
             candidate = copy.deepcopy(manifest)
             if revision is None:
                 candidate.pop("revision")
@@ -197,7 +197,7 @@ class V3Tests(unittest.TestCase):
         self.assertEqual(json.loads(raw[64:]), catalog)
         self.assertEqual(catalog["schema"], 3)
         package = catalog["packages"][0]
-        self.assertEqual(package["version"], self.spec["commit"][:12] + "-dev-r3")
+        self.assertEqual(package["version"], self.spec["commit"][:12] + "-dev-r" + str(self.spec["revision"]))
         self.assertEqual(package["extensions"], ["gb", "gbc", "sgb"])
         self.assertFalse(package["manual"])
         manifest_bytes = (site / "v3" / package["source"]).read_bytes()

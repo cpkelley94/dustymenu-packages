@@ -8,13 +8,14 @@
   "commit": "c4d8672806b4a1cff8012fd40de4acf69b0094c2",
   "toolchainImage": "skylyrac/blocksds:slim-v1.24.0@sha256:4220d25b110833d40f22596061b59718fe8044ce8a18e0531739e0624da019b8",
   "provenance": "source",
-  "revision": 3,
+  "revision": 4,
   "build": {
     "commands": [
       "mkdir -p upstream/.dusty-build && cp \"$DUSTY_PACKAGE_ROOT/packages/v3/compat/gameyob/\"*.patch \"$DUSTY_PACKAGE_ROOT/packages/v3/compat/gameyob/\"*.h \"$DUSTY_PACKAGE_ROOT/packages/v3/compat/gameyob/README.md\" upstream/.dusty-build/",
       "git apply --directory=upstream upstream/.dusty-build/long-paths.patch",
       "git apply --directory=upstream upstream/.dusty-build/battery-init.patch",
-      "cp upstream/.dusty-build/batteryfile.h upstream/arm9/include/",
+      "git apply --directory=upstream upstream/.dusty-build/display-restore.patch",
+      "cp upstream/.dusty-build/*.h upstream/arm9/include/",
       "make -C upstream"
     ],
     "outputs": [
@@ -28,5 +29,5 @@
   "extensions": ["gb", "gbc", "sgb"],
   "manual": false,
   "license": "MIT",
-  "notes": "Pinned GameYob with revision-3 battery-save initialization plus long-path and empty-browser fixes. Missing saves are created without closing null streams; existing save bytes and RTC data are preserved. Verify GB/GBC startup and SRAM persistence on hardware."
+  "notes": "GameYob revision 4 restores the options console after scaling, services deferred UI/file tasks outside IRQs, and applies saved display settings after defaults. Includes the battery-save, long-path and empty-browser fixes. Open options with R or touch. Hardware retesting is pending."
 }

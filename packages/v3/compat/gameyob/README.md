@@ -1,4 +1,4 @@
-# GameYob downstream startup fixes (dustyMenu revision 3)
+# GameYob downstream fixes (dustyMenu revision 4)
 
 These MIT-licensed downstream patches apply to DS-Homebrew/GameYob commit
 `c4d8672806b4a1cff8012fd40de4acf69b0094c2`.
@@ -33,6 +33,35 @@ handled as 64 KiB. Host tests compile this exact helper and inject I/O failures;
 melonDS tests verify GB/GBC battery startup, second-boot SRAM persistence, an RTC
 cartridge, and a 4 MiB banked battery cartridge.
 
-The build copies this notice, both patches, and the helper into
+## Revision 4: scaling transitions and options console
+
+`display-restore.patch` restores VRAM C, text mode, BG0, and blending state before
+reloading the console after bitmap scaling. Its map uses block 22, separate from
+the font at tile base 0 and consistent with the menu's highlight operations.
+The old block-2 map overlapped the font allocation. Highlight code now uses the
+actual console map pointer.
+
+Deferred callbacks are serviced once per DS frame in the foreground, after IRQ
+notification. The VBlank IRQ no longer copies/allocates a vector or invokes
+callbacks that can initialize stdio, print menus, or load border files. Chained
+screen/backlight stages remain separated by frame boundaries, including tasks
+queued after the current frame's IRQ. Leaving scaling drains a full frame before
+reassigning VRAM C so an in-flight ARM7 capture/DMA can finish. Stale transition
+stages check the current mode, and the menu redraw follows console restoration.
+The actual helper is in `framequeue.h`, with portable ordering/reentrancy tests;
+`consolelayout.h` is checked for font/map overlap.
+
+Menu setup now initializes defaults, parses configuration/palettes/controls,
+then applies the resulting callbacks, preserving saved display choices without
+using palette data before it exists. Parsed selections are bounded. The config
+reader handles EOF explicitly; saving creates `/_nds` if needed and checks
+flush/sync/close results. A missing border filename falls back to `/border.bmp`.
+
+The options menu is opened with R or touch. A blank/off lower screen during
+normal play with Console Output off is intentional; it should show the menu
+when requested. Native 1x/Aspect/Full transitions and physical crash behavior
+still need DS Lite retesting after the local runtime checks.
+
+The build copies this notice, all patches, and the helpers into
 `upstream/.dusty-build` before applying them, so modified source and exact build
 inputs ship in `source.tar.gz`.

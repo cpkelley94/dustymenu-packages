@@ -6,10 +6,10 @@ The legacy schema-2 GBARunner3 catalog remains at `/v2/catalog.bin`. The current
 client targets the signed schema-3 catalog at `/v3/catalog.bin`, which can carry
 all supported emulator packages in one bounded manifest. All seven CI jobs passed
 in [build run 39825858870](https://github.com/cpkelley94/dustymenu-packages/actions/runs/39825858870).
-Catalog sequence 2 is live following
-[publication run 40015396016](https://github.com/cpkelley94/dustymenu-packages/actions/runs/40015396016)
-and is retained in release `catalog-v3-2`. The revision-3 GameYob correction below
-is prepared locally and has not yet been published.
+Catalog sequences 1–3 are retained in releases `catalog-v3-1` through
+[`catalog-v3-3`](https://github.com/cpkelley94/dustymenu-packages/releases/tag/catalog-v3-3).
+The revision-4 GameYob display correction below is prepared and validated locally;
+it has not yet been published.
 
 | Package | System | Entry point | Launch |
 | --- | --- | --- | --- |
@@ -35,8 +35,9 @@ incomplete glob inventories.
 
 - GBARunner3 also pins its `libtwl` submodule and all 301 compatibility configs.
 - GameYob and PicoDriveTWL build in a pinned BlocksDS image.
-- GameYob revision 3 includes checked battery-save initialization as well as
-  the earlier long-ROM-path/empty-browser patch.
+- GameYob revision 4 restores the options console and display transitions,
+  retaining checked battery-save initialization and the earlier
+  long-ROM-path/empty-browser patch.
   Package revisions add a `-rN` suffix to the installed version, so the device
   can offer an update while the upstream source commit remains pinned.
 - GBARunner2, nesDS, and SNEmulDS 0.6a build in pinned devkitARM images.
@@ -115,6 +116,46 @@ replace published package assets. Use a publish workflow for production updates.
 
 Host tests require Python, OpenSSL, and a C++17 compiler (`g++`).
 
+### GameYob scaling and options console (revision 4)
+
+After the revision-3 save correction, the user reports Pokémon Crystal boots on
+DS Lite, but returning from scaled to native display crashes and the options
+screen is blank. The blank options screen was reproduced locally; the official
+v0.5.2 binary showed its menu under the same emulator sequence.
+
+Revision 4 restores the sub display's VRAM/text/blending state and places the
+console map outside its font allocation. Deferred callbacks now run in the
+foreground rather than performing allocations, menu output, or border-file I/O
+inside VBlank IRQs. Scaling transitions retain frame boundaries and drain a full
+frame before reusing VRAM C. Menu redraw follows console restoration. Settings
+are applied after defaults and configuration parsing, so saved scaling persists.
+
+The exact package recipe was clean-built in the pinned BlocksDS image. All 30
+host tests pass, including the real foreground queue/layout and battery helpers.
+Through dustyMenu and the real Pico Loader in melonDS:
+
+- Six scaling round trips with continuously dirty battery RAM and a custom
+  border restored the native game image pixel-for-pixel.
+- R, R from scaled mode, and touch produced identical lower-screen menus.
+- A double-speed GBC/MBC3 RTC diagnostic passed three round trips and wrote the
+  expected SRAM plus RTC footer.
+- Saving Full scaling created `/_nds/gameyobds.ini`; a second boot retained Full
+  width and a visible options menu.
+- A signed revision-3 → revision-4 install through the shared client preserved
+  SRAM/RTC bytes, INI, system defaults, and per-game overrides. The source archive
+  matches the recipe inputs and compiled sources.
+
+The exact reported hardware abort was not reproduced in melonDS. DS Lite
+retesting of Pokémon Crystal and repeated Y toggles is still required. Open
+options with **R** or **touch**; a blank/off lower display during normal play
+with Console Output off is intentional.
+
+The local package is `dist/gameyob/`; its executable is inside the ZIP at
+`emulators/gameyob.nds`. After committing and pushing, build a fresh run and
+publish `c4d8672806b4-dev-r4` using the next unused catalog sequence (currently 4).
+The revision-4 spec rejects older bundles. Refresh the device catalog and update
+GameYob after publication. Keep existing saves and settings for the retest.
+
 ### GameYob battery-backed cartridge startup (revision 3)
 
 The user clarified that no-save Kirby's Dream Land boots, while save-backed GB
@@ -130,11 +171,10 @@ banked battery cases also start. The host regression test compiles the exact
 helper used by the package and covers new, short, full, oversized, and RTC saves,
 plus open/read/write/sync failure injection.
 
-Build and publish a fresh run to offer `c4d8672806b4-dev-r3` in Install Emulators.
-Old GameYob revision-1/2 artifacts are rejected for the revision-3 spec. After
-publication (next sequence 3), refresh the device catalog and update GameYob.
-The corrected local bundle is generated under `dist/gameyob/`. Existing saves
-should be retained for the update, not deleted as a troubleshooting step.
+Revision 3 was published in catalog sequence 3. The user subsequently reported
+Pokémon Crystal boots; the other previously affected titles have not been
+retested. Revision 4 retains this save correction. Existing saves should be
+retained for updates, not deleted as a troubleshooting step.
 
 ### Earlier long-path correction (revision 2)
 

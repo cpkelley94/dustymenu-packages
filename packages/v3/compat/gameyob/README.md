@@ -1,4 +1,4 @@
-# GameYob downstream fixes (dustyMenu revision 4)
+# GameYob downstream fixes (dustyMenu revision 5)
 
 These MIT-licensed downstream patches apply to DS-Homebrew/GameYob commit
 `c4d8672806b4a1cff8012fd40de4acf69b0094c2`.
@@ -59,8 +59,37 @@ flush/sync/close results. A missing border filename falls back to `/border.bmp`.
 
 The options menu is opened with R or touch. A blank/off lower screen during
 normal play with Console Output off is intentional; it should show the menu
-when requested. Native 1x/Aspect/Full transitions and physical crash behavior
-still need DS Lite retesting after the local runtime checks.
+when requested. Native 1x/Aspect/Full transitions were checked locally. The user
+subsequently reported the revision-4 build works
+well apart from Suspend's ROM-browser failure, addressed below.
+
+## Revision 5: Suspend/Exit ROM browser
+
+Suspend deliberately saves a `.yss` state and opens the ROM browser; it is not
+lid sleep. argv autoload bypassed browser state initialization, leaving the old
+`/lameboy` default. When that directory was absent, its unchecked `chdir` left
+the browser in the emulator's directory, often showing only `..` and no games.
+The old parent-navigation code removed the final path component, then assumed
+another slash remained. A top-level directory such as `fat:/emulators` therefore
+passed address 1 to `std::string`, an invalid-pointer data-abort path. Nested
+directories also selected the wrong parent entry.
+
+`browser-resume.patch` records the argv ROM's directory and filename without
+changing cwd or save paths during play. Suspend/Exit can then show and preselect
+that ROM. `browserpath.h` handles parent selection for device-prefixed paths,
+top-level folders, roots, and relative argv directories. Directory navigation
+checks open/chdir before replacing the live handle; a missing configured folder
+falls back to root. Extensionless files no longer create a null-plus-one pointer,
+and unknown directory types are resolved with `stat`. Empty lists show a message
+and retain the existing guarded A action.
+
+The actual path helpers have portable regression tests. The clean package ran
+through dustyMenu/Pico in melonDS: Suspend opened the correct folder, A resumed
+the saved state (matching the pre-suspend image rather than a fresh boot), and
+the consumed `.yss` was removed. A double-speed GBC/MBC3 RTC case navigated up to
+root, pressed B at root, and returned to resume with an extensionless file
+present. SRAM/RTC sizes and markers remained correct. Scaling and R/touch options
+also passed after resume. Physical DS Lite retesting remains pending.
 
 The build copies this notice, all patches, and the helpers into
 `upstream/.dusty-build` before applying them, so modified source and exact build

@@ -7,6 +7,17 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class GameYobBatteryTests(unittest.TestCase):
+    def test_browser_paths(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            binary = Path(temporary) / "browser-test"
+            subprocess.run([
+                "g++", "-std=c++17", "-Wall", "-Wextra", "-Werror",
+                "-I" + str(ROOT / "packages/v3/compat/gameyob"),
+                str(ROOT / "tests/gameyob_browser_test.cpp"), "-o", str(binary),
+            ], check=True, capture_output=True)
+            result = subprocess.run([str(binary)], check=True, capture_output=True, text=True)
+            self.assertIn("Browser parent paths", result.stdout)
+
     def test_display_queue_and_console_layout(self):
         with tempfile.TemporaryDirectory() as temporary:
             binary = Path(temporary) / "display-test"

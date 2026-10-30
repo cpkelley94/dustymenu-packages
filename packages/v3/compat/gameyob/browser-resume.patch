@@ -1,0 +1,169 @@
+diff --git a/arm9/source/filechooser.cpp b/arm9/source/filechooser.cpp
+--- a/arm9/source/filechooser.cpp
++++ b/arm9/source/filechooser.cpp
+@@ -9,6 +9,7 @@
+ #include "inputhelper.h"
+ #include "console.h"
+ #include "gbgfx.h"
++#include "browserpath.h"
+ 
+ #define FLAG_DIRECTORY  1
+ #define FLAG_SUSPENDED  2
+@@ -215,12 +216,12 @@
+     int numExtensions = sizeof(extensions)/sizeof(const char*);
+     char* retval;
+     char buffer[256];
+-    char cwd[256];
+-    getcwd(cwd, 256);
+-    DIR* dp = opendir(cwd);
++    char cwd[GAMEYOB_PATH_BUFFER_SIZE];
++    DIR* dp = opendir(".");
+     struct dirent *entry;
+     if (dp == NULL) {
+         printf("Error opening directory.\n");
++        fileChooserOn = false;
+         return 0;
+     }
+     while (true) {
+@@ -231,10 +232,15 @@
+ 
+         // Read file list
+         while ((entry = readdir(dp)) != NULL) {
+-            char* ext = strrchr(entry->d_name, '.')+1;
++            const char* ext = gameyobFileExtension(entry->d_name);
++            bool isDirectory = entry->d_type == DT_DIR;
++            if (entry->d_type == DT_UNKNOWN) {
++                struct stat info;
++                isDirectory = stat(entry->d_name, &info) == 0 && S_ISDIR(info.st_mode);
++            }
+             bool isValidExtension = false;
+             bool isRomFile = false;
+-            if (!(entry->d_type == DT_DIR)) {
++            if (!isDirectory) {
+                 for (int i=0; i<numExtensions; i++) {
+                     if (strcasecmp(ext, extensions[i]) == 0) {
+                         isValidExtension = true;
+@@ -248,10 +254,10 @@
+                 }
+             }
+ 
+-            if ((entry->d_type == DT_DIR) || isValidExtension) {
++            if (isDirectory || isValidExtension) {
+                 if (!(strcmp(".", entry->d_name) == 0)) {
+                     int flag = 0;
+-                    if (entry->d_type == DT_DIR)
++                    if (isDirectory)
+                         flag |= FLAG_DIRECTORY;
+                     if (isRomFile)
+                         flag |= FLAG_ROM;
+@@ -278,7 +284,7 @@
+                     numFiles++;
+                 }
+             }
+-            else if (strcasecmp(ext, "yss") == 0 && !(entry->d_type == DT_DIR)) {
++            else if (strcasecmp(ext, "yss") == 0 && !isDirectory) {
+                 bool matched = false;
+                 char buffer2[256];
+                 strcpy(buffer2, entry->d_name);
+@@ -324,6 +330,8 @@
+         while (!readDirectory) {
+             // Draw the screen
+             consoleClear();
++            if (numFiles == 0)
++                printf("No matching files.\n");
+             for (int i=scrollY; i<scrollY+filesPerPage && i<numFiles; i++) {
+                 if (i == fileSelection)
+                     printf("* ");
+@@ -354,7 +362,7 @@
+             }
+             if (canQuit) {
+                 if (numFiles < filesPerPage) {
+-                    for (int i=numFiles; i<filesPerPage; i++)
++                    for (int i=(numFiles == 0 ? 1 : numFiles); i<filesPerPage; i++)
+                         iprintfColored(CONSOLE_COLOR_WHITE, "\n");
+                 }
+                 iprintfColored(CONSOLE_COLOR_WHITE, "                Press Y to exit");
+@@ -370,9 +378,14 @@
+                     if (flags[fileSelection] & FLAG_DIRECTORY) {
+                         if (strcmp(filenames[fileSelection], "..") == 0)
+                             goto lowerDirectory;
++                        DIR* next = opendir(filenames[fileSelection]);
++                        if (next == NULL) continue;
++                        if (chdir(filenames[fileSelection]) != 0) {
++                            closedir(next);
++                            continue;
++                        }
+                         closedir(dp);
+-                        dp = opendir(filenames[fileSelection]);
+-                        chdir(filenames[fileSelection]);
++                        dp = next;
+                         readDirectory = true;
+                         fileSelection = 1;
+                         break;
+@@ -394,13 +407,17 @@
+                     if (stat("..", &statbuf) == 0) {
+ lowerDirectory:
+                         // Select this directory when going up
+-                        getcwd(cwd, 256);
+-                        *(strrchr(cwd, '/')) = '\0';
+-                        matchFile = string(strrchr(cwd, '/')+1);
+-
++                        cwd[0] = '\0';
++                        getcwd(cwd, sizeof(cwd));
++                        DIR* parent = opendir("..");
++                        if (parent == NULL) continue;
++                        if (chdir("..") != 0) {
++                            closedir(parent);
++                            continue;
++                        }
++                        matchFile = gameyobParentEntry(cwd);
+                         closedir(dp);
+-                        dp = opendir("..");
+-                        chdir("..");
++                        dp = parent;
+                         readDirectory = true;
+                         break;
+                     }
+@@ -462,12 +479,13 @@
+ 
+ 
+ void saveFileChooserState(FileChooserState* state) {
+-    char cwd[256];
+-    getcwd(cwd, 256);
++    char cwd[GAMEYOB_PATH_BUFFER_SIZE];
+     state->selection = fileSelection;
+-    state->directory = cwd;
++    if (getcwd(cwd, sizeof(cwd)) != NULL)
++        state->directory = cwd;
+ }
+ void loadFileChooserState(FileChooserState* state) {
+     fileSelection = state->selection;
+-    chdir(state->directory.c_str());
++    if (chdir(state->directory.c_str()) != 0)
++        chdir("/");
+ }
+diff --git a/arm9/source/main.cpp b/arm9/source/main.cpp
+--- a/arm9/source/main.cpp
++++ b/arm9/source/main.cpp
+@@ -20,6 +20,7 @@
+ #include "cheats.h"
+ #include "gbs.h"
+ #include "common.h"
++#include "browserpath.h"
+ 
+ extern time_t rawTime;
+ extern time_t lastRawTime;
+@@ -218,6 +219,13 @@
+     consoleInitialized = false;
+ 
+     if (argc >= 2 && loadRom(argv[1]) == 0) {
++        // argv launches bypass the browser. Remember this ROM's directory and
++        // selection so Suspend/Exit return here, not to the old /lameboy default.
++        char cwd[GAMEYOB_PATH_BUFFER_SIZE];
++        if (getcwd(cwd, sizeof(cwd)) != NULL)
++            romChooserState.directory = gameyobRomDirectory(argv[1], cwd);
++        const char* slash = strrchr(argv[1], '/');
++        setFileChooserMatchFile(slash ? slash+1 : argv[1]);
+         updateScreens();
+         initializeGameboyFirstTime();
+     }

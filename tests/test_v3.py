@@ -161,7 +161,7 @@ class V3Tests(unittest.TestCase):
 
     def test_package_revision_rejects_old_bundle_and_retains_legacy_compatibility(self):
         manifest = emulators.bundle(self.spec, self.workspace, self.output)
-        for revision in (None, 1, 2, 3, True, "4"):
+        for revision in (None, 1, 2, 3, 4, True, "5"):
             candidate = copy.deepcopy(manifest)
             if revision is None:
                 candidate.pop("revision")

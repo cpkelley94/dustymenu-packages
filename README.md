@@ -6,9 +6,9 @@ The legacy schema-2 GBARunner3 catalog remains at `/v2/catalog.bin`. The current
 client targets the signed schema-3 catalog at `/v3/catalog.bin`, which can carry
 all supported emulator packages in one bounded manifest. All seven CI jobs passed
 in [build run 39825858870](https://github.com/cpkelley94/dustymenu-packages/actions/runs/39825858870).
-Catalog sequences 1–3 are retained in releases `catalog-v3-1` through
-[`catalog-v3-3`](https://github.com/cpkelley94/dustymenu-packages/releases/tag/catalog-v3-3).
-The revision-4 GameYob display correction below is prepared and validated locally;
+Catalog sequences 1–4 are retained in releases `catalog-v3-1` through
+[`catalog-v3-4`](https://github.com/cpkelley94/dustymenu-packages/releases/tag/catalog-v3-4).
+The revision-5 GameYob Suspend/browser correction below is prepared and validated locally;
 it has not yet been published.
 
 | Package | System | Entry point | Launch |
@@ -35,9 +35,9 @@ incomplete glob inventories.
 
 - GBARunner3 also pins its `libtwl` submodule and all 301 compatibility configs.
 - GameYob and PicoDriveTWL build in a pinned BlocksDS image.
-- GameYob revision 4 restores the options console and display transitions,
-  retaining checked battery-save initialization and the earlier
-  long-ROM-path/empty-browser patch.
+- GameYob revision 5 fixes Suspend/Exit browser paths and parent navigation,
+  retaining revision-4 display/settings restoration, checked battery-save
+  initialization and the earlier long-ROM-path/empty-browser patch.
   Package revisions add a `-rN` suffix to the installed version, so the device
   can offer an update while the upstream source commit remains pinned.
 - GBARunner2, nesDS, and SNEmulDS 0.6a build in pinned devkitARM images.
@@ -116,6 +116,33 @@ replace published package assets. Use a publish workflow for production updates.
 
 Host tests require Python, OpenSSL, and a C++17 compiler (`g++`).
 
+### GameYob Suspend and ROM browser (revision 5)
+
+The user reports revision 4 works well, except Suspend opens an apparently empty
+browser and A causes an ARM9 data abort. Suspend is intended to save a resumable
+`.yss` state and open the ROM browser. argv autoload never updated that browser's
+old `/lameboy` directory. With that folder absent, it stayed in the emulator's
+directory, showing only `..` in the local reproduction. Parent navigation then
+used a null-plus-one pointer when leaving a top-level directory; extensionless
+files had another null-plus-one extension pointer.
+
+Revision 5 opens and preselects the launched ROM's folder, safely handles
+device-prefixed/top-level/root parent paths, checks directory transitions, and
+handles extensionless files. It preserves existing save/state formats and paths.
+The clean package recipe builds in the pinned image and all 31 host tests pass.
+Through dustyMenu/Pico in melonDS, battery-backed GBC and double-speed GBC/MBC3
+RTC diagnostics both Suspend and resume their exact saved image (not a reboot),
+consume the `.yss`, and retain SRAM/RTC. Root navigation, B at root, extensionless
+file filtering, and scaling/R/touch after resume also pass. A signed revision-4
+→ revision-5 upgrade preserves SRAM/RTC, existing suspend states, INI, defaults,
+and per-game overrides; the source archive matches the recipe and sources.
+
+Local artifacts are in `dist/gameyob/`; the ZIP contains
+`emulators/gameyob.nds`. After committing/pushing, build a fresh run and publish
+`c4d8672806b4-dev-r5` with the next unused catalog sequence (currently 5).
+Refresh the device catalog and update GameYob. Retest Suspend → A and parent/root
+navigation on DS Lite with existing saves; physical validation remains pending.
+
 ### GameYob scaling and options console (revision 4)
 
 After the revision-3 save correction, the user reports Pokémon Crystal boots on
@@ -145,16 +172,13 @@ Through dustyMenu and the real Pico Loader in melonDS:
   SRAM/RTC bytes, INI, system defaults, and per-game overrides. The source archive
   matches the recipe inputs and compiled sources.
 
-The exact reported hardware abort was not reproduced in melonDS. DS Lite
-retesting of Pokémon Crystal and repeated Y toggles is still required. Open
+The exact reported hardware abort was not reproduced in melonDS. The user
+subsequently reported revision 4 works well apart from the Suspend issue above. Open
 options with **R** or **touch**; a blank/off lower display during normal play
 with Console Output off is intentional.
 
-The local package is `dist/gameyob/`; its executable is inside the ZIP at
-`emulators/gameyob.nds`. After committing and pushing, build a fresh run and
-publish `c4d8672806b4-dev-r4` using the next unused catalog sequence (currently 4).
-The revision-4 spec rejects older bundles. Refresh the device catalog and update
-GameYob after publication. Keep existing saves and settings for the retest.
+Revision 4 was published in catalog sequence 4. Revision 5 retains these display
+and settings fixes. Keep existing saves and settings for updates and retesting.
 
 ### GameYob battery-backed cartridge startup (revision 3)
 

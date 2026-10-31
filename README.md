@@ -6,10 +6,10 @@ The legacy schema-2 GBARunner3 catalog remains at `/v2/catalog.bin`. The current
 client targets the signed schema-3 catalog at `/v3/catalog.bin`, which can carry
 all supported emulator packages in one bounded manifest. All seven CI jobs passed
 in [build run 39825858870](https://github.com/cpkelley94/dustymenu-packages/actions/runs/39825858870).
-Catalog sequences 1–4 are retained in releases `catalog-v3-1` through
-[`catalog-v3-4`](https://github.com/cpkelley94/dustymenu-packages/releases/tag/catalog-v3-4).
-The revision-5 GameYob Suspend/browser correction below is prepared and validated locally;
-it has not yet been published.
+Catalog sequences 1–5 are retained in releases `catalog-v3-1` through
+[`catalog-v3-5`](https://github.com/cpkelley94/dustymenu-packages/releases/tag/catalog-v3-5).
+The SNEmulDS 0.6a revision-2 startup/paging correction below is prepared and
+validated locally; it has not yet been published.
 
 | Package | System | Entry point | Launch |
 | --- | --- | --- | --- |
@@ -47,6 +47,8 @@ incomplete glob inventories.
 - SNEmulDS 0.6a stages two MPL-2.0 crt0 sources from `devkitarm-crtls` because
   its 2015 linker scripts predate the 2017 startup refactor; temporary
   Windows-path include aliases are removed before the source archive is made.
+  Package revision 2 also fixes direct-launch selector cleanup and large-ROM
+  paging aliases, retaining the upstream configuration defaults.
 - SNEmulDS 0.6d uses the upstream TGDS 1.65 release files because TGDS requires a
   custom newlib rebuild that upstream does not provide as a pinned container. The
   spec records this as `upstream-release` provenance rather than claiming a CI
@@ -116,6 +118,40 @@ replace published package assets. Use a publish workflow for production updates.
 
 Host tests require Python, OpenSSL, and a C++17 compiler (`g++`).
 
+### SNEmulDS 0.6a startup and large-ROM paging (revision 2)
+
+The user reports Chrono Trigger USA remains blank while the lower-left
+percentage fluctuates around 332%. That value is an emulation-speed estimate
+from `engine.c`, not loading progress. Chrono Trigger is a 4 MiB HiROM title,
+exercising the emulator's large-ROM path.
+
+Two failures were confirmed with original diagnostics through dustyMenu/Pico:
+
+- argv/frontend startup unconditionally deleted the ROM selector even though
+  autoload never created one. The published binary aborted in
+  `GUI_deleteSelector`; cleanup now checks and clears the screen pointer.
+- Paged ROM mappings added a fixed 4 MiB to a buffer already mapped by
+  `memUncached`, producing an invalid address with the pinned SDK. A 4 MiB
+  HiROM diagnostic failed on a jump into paged code. Using the SDK alias
+  conversion instead lets that same program execute successfully.
+
+Revision 2 (`a92689abeb1d-dev-r2`) is clean-built from the pinned source/image.
+All 31 host tests pass. The exact packaged binary passed runtime diagnostics for
+small LoROM, 4 MiB HiROM paged execution, and two passes of data reads across 63
+banks (evicting the 47-page cache). Tests include a 512-byte copier header,
+Chrono Trigger's config profile, and SPC700 readiness/upload/execution; the
+diagnostics reached their uniform blue success screen without ARM9 aborts.
+A signed original → revision-2 update through the shared client preserved custom
+`snemul.cfg`, existing SRAM/ROM bytes, defaults, and overrides. Corresponding
+source and recipe inputs were verified against the clean build.
+
+Artifacts are in `dist/snemulds-06a/`; the ZIP contains
+`emulators/snemulds-06a.nds`. After committing/pushing, build a fresh workflow run
+and publish using the next unused catalog sequence (currently 6). Refresh the
+device catalog and update **SNEmulDS 0.6a**. Keep existing config and saves.
+The actual Chrono Trigger ROM was not available locally; its intro/title screen,
+gameplay, sound and save/reload still need the user's DS Lite retest.
+
 ### GameYob Suspend and ROM browser (revision 5)
 
 The user reports revision 4 works well, except Suspend opens an apparently empty
@@ -137,11 +173,9 @@ file filtering, and scaling/R/touch after resume also pass. A signed revision-4
 → revision-5 upgrade preserves SRAM/RTC, existing suspend states, INI, defaults,
 and per-game overrides; the source archive matches the recipe and sources.
 
-Local artifacts are in `dist/gameyob/`; the ZIP contains
-`emulators/gameyob.nds`. After committing/pushing, build a fresh run and publish
-`c4d8672806b4-dev-r5` with the next unused catalog sequence (currently 5).
-Refresh the device catalog and update GameYob. Retest Suspend → A and parent/root
-navigation on DS Lite with existing saves; physical validation remains pending.
+Revision 5 was published in catalog sequence 5. The user confirmed the Suspend
+fix works on their DS Lite. This is a user-reported hardware result, in addition
+to the local diagnostic evidence above.
 
 ### GameYob scaling and options console (revision 4)
 

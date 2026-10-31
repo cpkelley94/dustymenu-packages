@@ -1,0 +1,40 @@
+diff --git a/arm9/source/gui_draw/snemul_gui.c b/arm9/source/gui_draw/snemul_gui.c
+--- a/arm9/source/gui_draw/snemul_gui.c
++++ b/arm9/source/gui_draw/snemul_gui.c
+@@ -1031,7 +1031,11 @@
+ 
+ void GUI_deleteROMSelector()
+ {
+-	GUI_deleteSelector(GUI.screen); // Should also delete dir_list
++	// Frontend/argv autoload never creates a ROM selector.
++	if (GUI.screen != NULL) {
++		GUI_deleteSelector(GUI.screen); // Should also delete dir_list
++		GUI.screen = NULL;
++	}
+ 	GUI_clearScreen(0);
+ }
+ 
+diff --git a/arm9/source/memmap.c b/arm9/source/memmap.c
+--- a/arm9/source/memmap.c
++++ b/arm9/source/memmap.c
+@@ -437,7 +437,10 @@
+ 	FS_loadROMPage((char *)ptr, SNES.ROMHeader+i*PAGE_SIZE, PAGE_SIZE);
+ 	//	LOG("ret = %d %x %x %x %x\n", ret, ptr[0], ptr[1], ptr[2], ptr[3]);
+ 
+-	mem_setCacheBlock(i, ptr+0x400000); // Give Read-only memory
++	// SNES_ROM_ADDRESS is already an uncached alias. Adding a fixed 4 MiB
++	// can leave main RAM entirely with newer libnds alias layouts.
++	ptr = memUncached(ptr);
++	mem_setCacheBlock(i, ptr);
+ 
+ 	ROM_paging_cur++;
+ 	if (ROM_paging_cur >= ROM_PAGING_SIZE/PAGE_SIZE)
+@@ -445,7 +448,7 @@
+ 
+ 	//FS_flog("%d %p\n", i, ptr+(block&7)*8192-(block << 13));
+ 	LOG("<== %d %p\n", block, ptr+(block&7)*8192-(block << 13));
+-	return ptr+(block&7)*8192-(block << 13)+0x400000;
++	return ptr+(block&7)*8192-(block << 13);
+ }
+ 
+ void InitMap()
